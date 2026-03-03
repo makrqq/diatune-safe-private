@@ -64,7 +64,7 @@ class AnalysisService:
             period_end=period_end,
         )
         saved = self.repository.save_report(report)
-        logger.info("Analysis completed for patient_id=%s run_id=%s", patient_id, saved.run_id)
+        logger.info("Анализ завершен для patient_id=%s run_id=%s", patient_id, saved.run_id)
         return saved
 
     def get_latest_report(self, patient_id: str) -> AnalysisReport | None:
@@ -98,9 +98,9 @@ class AnalysisService:
                 )
                 if dataset.glucose:
                     return dataset
-                logger.warning("Nightscout returned empty glucose dataset; using synthetic fallback.")
+                logger.warning("Nightscout вернул пустой набор глюкозы; используем синтетические данные.")
             except DataSourceError as exc:
-                logger.exception("Nightscout fetch failed (%s), using synthetic fallback.", exc)
+                logger.exception("Ошибка загрузки из Nightscout (%s), используем синтетические данные.", exc)
         return await self.synthetic_data_source.fetch_dataset(
             patient_id=patient_id,
             since=period_start,
