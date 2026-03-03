@@ -3,13 +3,17 @@ package telegram
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"diatune-safe/internal/config"
 	"diatune-safe/internal/domain"
 	"diatune-safe/internal/service"
+	appversion "diatune-safe/internal/version"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -18,6 +22,8 @@ type Runner struct {
 	settings config.Settings
 	service  *service.Service
 }
+
+const telegramMessageLimit = 3500
 
 func New(settings config.Settings, svc *service.Service) *Runner {
 	return &Runner{settings: settings, service: svc}
@@ -64,15 +70,18 @@ func (r *Runner) handleCommand(ctx context.Context, bot *tgbotapi.BotAPI, chatID
 	switch cmd {
 	case "/start", "/help":
 		r.send(bot, chatID,
-			"Diatune Safe Bot\n"+
+			fmt.Sprintf("Diatune Safe Bot %s\n", appversion.Semver())+
 				"Команды:\n"+
 				"/analyze [patient_id] [days]\n"+
 				"/backtest [patient_id] [days]\n"+
 				"/weekstats [patient_id] [days]\n"+
 				"/latest [patient_id]\n"+
 				"/pending [patient_id]\n"+
+				"/version\n"+
 				"/ack <recommendation_id> [reviewer]\n\n"+
 				"Сервис только предлагает изменения и никогда не применяет их автоматически.")
+	case "/version":
+		r.send(bot, chatID, "Версия: "+appversion.Semver())
 	case "/analyze":
 		patientID := fmt.Sprintf("tg-%d", userID)
 		if len(args) > 0 {
@@ -165,9 +174,9 @@ func (r *Runner) handleCommand(ctx context.Context, bot *tgbotapi.BotAPI, chatID
 			r.send(bot, chatID, "Нет ожидающих подтверждения рекомендаций.")
 			return
 		}
-		lines := []string{"Pending recommendations:"}
-		for _, rec := range recs {
-			lines = append(lines, formatRecommendation(rec, r.settings))
+		lines := []string{"Ожидают подтверждения:"}
+		for i, rec := range recs {
+			lines = append(lines, formatRecommendation(i+1, rec, r.settings))
 		}
 		r.send(bot, chatID, strings.Join(lines, "\n"))
 	case "/ack":
@@ -212,8 +221,10 @@ func (r *Runner) allowed(userID int64) bool {
 }
 
 func (r *Runner) send(bot *tgbotapi.BotAPI, chatID int64, text string) {
-	msg := tgbotapi.NewMessage(chatID, text)
-	_, _ = bot.Send(msg)
+	for _, chunk := range SplitForTelegram(text, telegramMessageLimit) {
+		msg := tgbotapi.NewMessage(chatID, chunk)
+		_, _ = bot.Send(msg)
+	}
 }
 
 func FormatReport(report domain.AnalysisReport) string {
@@ -221,27 +232,60 @@ func FormatReport(report domain.AnalysisReport) string {
 }
 
 func FormatReportWithSettings(report domain.AnalysisReport, settings config.Settings) string {
+	openRecs, blockedRecs := splitRecommendations(report.Recommendations)
+	sort.Slice(openRecs, func(i, j int) bool {
+		if openRecs[i].Confidence == openRecs[j].Confidence {
+			return abs(openRecs[i].PercentChange) > abs(openRecs[j].PercentChange)
+		}
+		return openRecs[i].Confidence > openRecs[j].Confidence
+	})
+
 	lines := []string{
-		fmt.Sprintf("Отчет #%v [%s]", derefInt64(report.RunID), report.PatientID),
+		fmt.Sprintf("Diatune Safe %s", appversion.Semver()),
+		fmt.Sprintf("Пациент: %s | Отчет: #%v", report.PatientID, derefInt64(report.RunID)),
 		fmt.Sprintf("Сформирован: %s", formatTS(report.GeneratedAt, settings.Timezone)),
 		fmt.Sprintf("Период: %s..%s", formatDate(report.PeriodStart, settings.Timezone), formatDate(report.PeriodEnd, settings.Timezone)),
-		fmt.Sprintf("Гипо-эпизоды за период: %d", report.GlobalHypoEvents),
+		"",
+		fmt.Sprintf("Сводка: open=%d | blocked=%d | гипо=%d", len(openRecs), len(blockedRecs), report.GlobalHypoEvents),
 	}
 	if len(report.Warnings) > 0 {
-		lines = append(lines, "Предупреждения:")
-		for _, w := range report.Warnings {
-			lines = append(lines, "- "+w)
+		lines = append(lines, "", "Предупреждения:")
+		limit := 3
+		if len(report.Warnings) < limit {
+			limit = len(report.Warnings)
+		}
+		for i, w := range report.Warnings[:limit] {
+			lines = append(lines, fmt.Sprintf("%d. %s", i+1, w))
+		}
+		if len(report.Warnings) > limit {
+			lines = append(lines, fmt.Sprintf("... и еще %d", len(report.Warnings)-limit))
 		}
 	}
-	lines = append(lines, "Рекомендации для профиля AAPS:")
-	for _, rec := range report.Recommendations {
-		lines = append(lines, formatRecommendation(rec, settings))
+
+	lines = append(lines, "", "Рекомендации для AAPS (TOP 5):")
+	if len(openRecs) == 0 {
+		lines = append(lines, "Сейчас нет открытых предложений. Проверь /weekstats и накопление данных.")
+	} else {
+		limit := 5
+		if len(openRecs) < limit {
+			limit = len(openRecs)
+		}
+		for i, rec := range openRecs[:limit] {
+			lines = append(lines, formatRecommendation(i+1, rec, settings))
+		}
+		if len(openRecs) > limit {
+			lines = append(lines, fmt.Sprintf("... еще %d открытых рекомендаций в БД.", len(openRecs)-limit))
+		}
 	}
-	lines = append(lines, "Важно: это только предложения, ручное решение обязательно.")
+
+	if len(blockedRecs) > 0 {
+		lines = append(lines, "", "Заблокировано (топ причин): "+joinTopBlockedReasons(blockedRecs, 3))
+	}
+	lines = append(lines, "", "Важно: только ручная валидация. Детали: /pending [patient_id]")
 	return strings.Join(lines, "\n")
 }
 
-func formatRecommendation(rec domain.Recommendation, settings config.Settings) string {
+func formatRecommendation(index int, rec domain.Recommendation, settings config.Settings) string {
 	status := "OPEN"
 	if rec.Blocked {
 		status = "BLOCKED"
@@ -258,24 +302,97 @@ func formatRecommendation(rec domain.Recommendation, settings config.Settings) s
 	if rec.Parameter == domain.ParameterICR {
 		paramTitle = "IC"
 	}
-	line := fmt.Sprintf("#%s %s [%s] %s: %.2f -> %.2f (%s%.1f%%, conf=%.2f)",
-		id, status, rec.BlockName, paramTitle, rec.CurrentValue, rec.ProposedValue, sign, rec.PercentChange, rec.Confidence)
-	if rec.Parameter == domain.ParameterISF {
-		line += fmt.Sprintf(" | %.2f -> %.2f mmol/L/U",
+
+	header := fmt.Sprintf("%d) %s [%s] %s: %s%.1f%% (conf %.2f, %s)",
+		index, rec.BlockName, paramTitle, status, sign, rec.PercentChange, rec.Confidence, id)
+	valueLine := fmt.Sprintf("   Было/станет: %.2f -> %.2f", rec.CurrentValue, rec.ProposedValue)
+	if rec.Parameter == domain.ParameterISF && strings.ToLower(settings.GlucoseUnit) != "mgdl" {
+		valueLine += fmt.Sprintf(" mg/dL/U (%.2f -> %.2f mmol/L/U)",
 			mgdlToMmol(rec.CurrentValue), mgdlToMmol(rec.ProposedValue))
 	}
-	line += " | AAPS: " + aapsPatchLine(rec, settings)
+
+	lines := []string{
+		header,
+		valueLine,
+		"   AAPS: " + aapsPatchLine(rec, settings),
+	}
 	if rec.BlockedReason != "" {
-		line += " | " + rec.BlockedReason
+		lines = append(lines, "   Причина блокировки: "+rec.BlockedReason)
 	}
-	if len(rec.Rationale) > 0 {
-		maxItems := 2
-		if len(rec.Rationale) < 2 {
-			maxItems = len(rec.Rationale)
+	if len(rec.Rationale) > 0 && !rec.Blocked {
+		lines = append(lines, "   Обоснование: "+firstSentence(rec.Rationale[0]))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func SplitForTelegram(text string, maxRunes int) []string {
+	if maxRunes < 256 {
+		maxRunes = 256
+	}
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return []string{""}
+	}
+
+	lines := strings.Split(text, "\n")
+	chunks := make([]string, 0, 4)
+	current := ""
+	for _, line := range lines {
+		if utf8.RuneCountInString(line) > maxRunes {
+			if current != "" {
+				chunks = append(chunks, current)
+				current = ""
+			}
+			parts := splitLongLine(line, maxRunes)
+			chunks = append(chunks, parts...)
+			continue
 		}
-		line += " | " + strings.Join(rec.Rationale[:maxItems], "; ")
+
+		if current == "" {
+			current = line
+			continue
+		}
+		candidate := current + "\n" + line
+		if utf8.RuneCountInString(candidate) <= maxRunes {
+			current = candidate
+			continue
+		}
+		chunks = append(chunks, current)
+		current = line
 	}
-	return line
+	if current != "" {
+		chunks = append(chunks, current)
+	}
+	return chunks
+}
+
+func splitLongLine(line string, maxRunes int) []string {
+	if utf8.RuneCountInString(line) <= maxRunes {
+		return []string{line}
+	}
+	words := strings.Fields(line)
+	if len(words) == 0 {
+		return []string{line}
+	}
+	chunks := make([]string, 0, 2)
+	current := ""
+	for _, word := range words {
+		if current == "" {
+			current = word
+			continue
+		}
+		candidate := current + " " + word
+		if utf8.RuneCountInString(candidate) <= maxRunes {
+			current = candidate
+			continue
+		}
+		chunks = append(chunks, current)
+		current = word
+	}
+	if current != "" {
+		chunks = append(chunks, current)
+	}
+	return chunks
 }
 
 func FormatBacktestReport(report domain.BacktestReport) string {
@@ -382,6 +499,79 @@ func resolveLoc(tz string) *time.Location {
 		return time.FixedZone("MSK", 3*60*60)
 	}
 	return loc
+}
+
+func splitRecommendations(recs []domain.Recommendation) ([]domain.Recommendation, []domain.Recommendation) {
+	openRecs := make([]domain.Recommendation, 0, len(recs))
+	blockedRecs := make([]domain.Recommendation, 0, len(recs))
+	for _, rec := range recs {
+		if rec.Blocked {
+			blockedRecs = append(blockedRecs, rec)
+		} else {
+			openRecs = append(openRecs, rec)
+		}
+	}
+	return openRecs, blockedRecs
+}
+
+func joinTopBlockedReasons(recs []domain.Recommendation, top int) string {
+	if len(recs) == 0 {
+		return "-"
+	}
+	counts := map[string]int{}
+	for _, rec := range recs {
+		reason := strings.TrimSpace(rec.BlockedReason)
+		if reason == "" {
+			reason = "другая причина"
+		}
+		counts[reason]++
+	}
+	type pair struct {
+		reason string
+		count  int
+	}
+	items := make([]pair, 0, len(counts))
+	for reason, count := range counts {
+		items = append(items, pair{reason: reason, count: count})
+	}
+	sort.Slice(items, func(i, j int) bool { return items[i].count > items[j].count })
+
+	if top <= 0 || top > len(items) {
+		top = len(items)
+	}
+	parts := make([]string, 0, top)
+	for _, item := range items[:top] {
+		parts = append(parts, fmt.Sprintf("%s (%d)", item.reason, item.count))
+	}
+	return strings.Join(parts, "; ")
+}
+
+func firstSentence(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return raw
+	}
+	runes := []rune(raw)
+	for i, r := range runes {
+		if r != '.' && r != '!' && r != '?' {
+			continue
+		}
+		if i+1 >= len(runes) {
+			return strings.TrimSpace(raw)
+		}
+		next := runes[i+1]
+		if unicode.IsSpace(next) || unicode.IsLetter(next) {
+			return strings.TrimSpace(string(runes[:i+1]))
+		}
+	}
+	return raw
+}
+
+func abs(v float64) float64 {
+	if v < 0 {
+		return -v
+	}
+	return v
 }
 
 func derefInt64(v *int64) int64 {
