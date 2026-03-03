@@ -31,7 +31,7 @@ func New(settings config.Settings, svc *service.Service) *Runner {
 
 func (r *Runner) Run(ctx context.Context) error {
 	if strings.TrimSpace(r.settings.TelegramBotToken) == "" {
-		return fmt.Errorf("TELEGRAM_BOT_TOKEN is empty")
+		return fmt.Errorf("переменная TELEGRAM_BOT_TOKEN не задана")
 	}
 	bot, err := tgbotapi.NewBotAPI(r.settings.TelegramBotToken)
 	if err != nil {
@@ -70,18 +70,20 @@ func (r *Runner) handleCommand(ctx context.Context, bot *tgbotapi.BotAPI, chatID
 	switch cmd {
 	case "/start", "/help":
 		r.send(bot, chatID,
-			fmt.Sprintf("Diatune Safe Bot %s\n", appversion.Semver())+
-				"Команды:\n"+
-				"/analyze [patient_id] [days]\n"+
-				"/backtest [patient_id] [days]\n"+
-				"/weekstats [patient_id] [days]\n"+
-				"/latest [patient_id]\n"+
-				"/pending [patient_id]\n"+
-				"/version\n"+
-				"/ack <recommendation_id> [reviewer]\n\n"+
-				"Сервис только предлагает изменения и никогда не применяет их автоматически.")
+			fmt.Sprintf("👋 Diatune Safe %s\n\n", appversion.Semver())+
+				"Я помогаю с анализом данных и формирую только предложения.\n"+
+				"Ничего автоматически не применяю.\n\n"+
+				"Быстрый старт:\n"+
+				"1) /analyze [patient_id] [days] - свежий разбор\n"+
+				"2) /pending [patient_id] - список изменений для ручной проверки\n"+
+				"3) /ack <id> [reviewer] - отметить рекомендацию как проверенную\n\n"+
+				"Дополнительно:\n"+
+				"• /latest [patient_id] - последний отчет\n"+
+				"• /backtest [patient_id] [days] - проверка на истории\n"+
+				"• /weekstats [patient_id] [days] - сравнение недели к неделе\n"+
+				"• /version - версия сервиса")
 	case "/version":
-		r.send(bot, chatID, "Версия: "+appversion.Semver())
+		r.send(bot, chatID, "Версия сервиса: "+appversion.Semver())
 	case "/analyze":
 		patientID := fmt.Sprintf("tg-%d", userID)
 		if len(args) > 0 {
@@ -91,14 +93,14 @@ func (r *Runner) handleCommand(ctx context.Context, bot *tgbotapi.BotAPI, chatID
 		if len(args) > 1 {
 			v, err := strconv.Atoi(args[1])
 			if err != nil {
-				r.send(bot, chatID, "Неверный формат days. Пример: /analyze demo 14")
+				r.send(bot, chatID, "Неверный формат количества дней. Пример: /analyze demo 14")
 				return
 			}
 			days = v
 		}
 		report, err := r.service.RunAnalysis(ctx, patientID, days, true)
 		if err != nil {
-			r.send(bot, chatID, "Ошибка анализа: "+err.Error())
+			r.send(bot, chatID, "Не удалось выполнить анализ: "+err.Error())
 			return
 		}
 		r.send(bot, chatID, FormatReportWithSettings(report, r.settings))
@@ -109,11 +111,11 @@ func (r *Runner) handleCommand(ctx context.Context, bot *tgbotapi.BotAPI, chatID
 		}
 		report, err := r.service.GetLatestReport(patientID)
 		if err != nil {
-			r.send(bot, chatID, "Ошибка: "+err.Error())
+			r.send(bot, chatID, "Не удалось получить последний отчет: "+err.Error())
 			return
 		}
 		if report == nil {
-			r.send(bot, chatID, "Отчеты не найдены. Выполните /analyze.")
+			r.send(bot, chatID, "Отчетов пока нет. Сначала запустите /analyze.")
 			return
 		}
 		r.send(bot, chatID, FormatReportWithSettings(*report, r.settings))
@@ -126,14 +128,14 @@ func (r *Runner) handleCommand(ctx context.Context, bot *tgbotapi.BotAPI, chatID
 		if len(args) > 1 {
 			v, err := strconv.Atoi(args[1])
 			if err != nil {
-				r.send(bot, chatID, "Неверный формат days. Пример: /backtest demo 42")
+				r.send(bot, chatID, "Неверный формат количества дней. Пример: /backtest demo 42")
 				return
 			}
 			days = v
 		}
 		report, err := r.service.RunBacktest(ctx, patientID, days, true)
 		if err != nil {
-			r.send(bot, chatID, "Ошибка бэктеста: "+err.Error())
+			r.send(bot, chatID, "Не удалось выполнить проверку на истории: "+err.Error())
 			return
 		}
 		r.send(bot, chatID, FormatBacktestReportWithSettings(report, r.settings))
@@ -149,14 +151,14 @@ func (r *Runner) handleCommand(ctx context.Context, bot *tgbotapi.BotAPI, chatID
 		if len(args) > 1 {
 			v, err := strconv.Atoi(args[1])
 			if err != nil {
-				r.send(bot, chatID, "Неверный формат days. Пример: /weekstats demo 7")
+				r.send(bot, chatID, "Неверный формат количества дней. Пример: /weekstats demo 7")
 				return
 			}
 			days = v
 		}
 		report, err := r.service.GetWeeklyStats(ctx, patientID, days, true)
 		if err != nil {
-			r.send(bot, chatID, "Ошибка weekly stats: "+err.Error())
+			r.send(bot, chatID, "Не удалось собрать недельную статистику: "+err.Error())
 			return
 		}
 		r.send(bot, chatID, FormatWeeklyStatsWithSettings(report, r.settings))
@@ -167,26 +169,36 @@ func (r *Runner) handleCommand(ctx context.Context, bot *tgbotapi.BotAPI, chatID
 		}
 		recs, err := r.service.ListPendingRecommendations(patientID, 20)
 		if err != nil {
-			r.send(bot, chatID, "Ошибка: "+err.Error())
+			r.send(bot, chatID, "Не удалось получить список рекомендаций: "+err.Error())
 			return
 		}
 		if len(recs) == 0 {
-			r.send(bot, chatID, "Нет ожидающих подтверждения рекомендаций.")
+			r.send(bot, chatID, "Сейчас нет рекомендаций, ожидающих ручной проверки.")
 			return
 		}
-		lines := []string{"Ожидают подтверждения:"}
+		sort.Slice(recs, func(i, j int) bool {
+			if recs[i].Blocked != recs[j].Blocked {
+				return !recs[i].Blocked
+			}
+			return recs[i].Confidence > recs[j].Confidence
+		})
+		lines := []string{
+			"📋 Рекомендации для ручной проверки",
+			fmt.Sprintf("Всего: %d (сначала к выполнению, затем заблокированные)", len(recs)),
+			"",
+		}
 		for i, rec := range recs {
-			lines = append(lines, formatRecommendation(i+1, rec, r.settings))
+			lines = append(lines, formatRecommendationCompact(i+1, rec, r.settings))
 		}
 		r.send(bot, chatID, strings.Join(lines, "\n"))
 	case "/ack":
 		if len(args) == 0 {
-			r.send(bot, chatID, "Использование: /ack <recommendation_id> [reviewer]")
+			r.send(bot, chatID, "Формат: /ack <recommendation_id> [reviewer]")
 			return
 		}
 		recID, err := strconv.ParseInt(args[0], 10, 64)
 		if err != nil {
-			r.send(bot, chatID, "recommendation_id должен быть числом.")
+			r.send(bot, chatID, "ID рекомендации должен быть числом.")
 			return
 		}
 		reviewer := fmt.Sprintf("tg:%d", userID)
@@ -195,16 +207,16 @@ func (r *Runner) handleCommand(ctx context.Context, bot *tgbotapi.BotAPI, chatID
 		}
 		ok, err := r.service.AcknowledgeRecommendation(recID, reviewer)
 		if err != nil {
-			r.send(bot, chatID, "Ошибка: "+err.Error())
+			r.send(bot, chatID, "Не удалось отметить рекомендацию: "+err.Error())
 			return
 		}
 		if ok {
-			r.send(bot, chatID, fmt.Sprintf("Рекомендация %d подтверждена (%s).", recID, reviewer))
+			r.send(bot, chatID, fmt.Sprintf("✅ Рекомендация %d отмечена как проверенная (%s).", recID, reviewer))
 		} else {
-			r.send(bot, chatID, "Рекомендация не найдена или уже подтверждена.")
+			r.send(bot, chatID, "Рекомендация не найдена или уже была отмечена ранее.")
 		}
 	default:
-		r.send(bot, chatID, "Неизвестная команда. Используйте /help")
+		r.send(bot, chatID, "Неизвестная команда. Отправьте /help, чтобы увидеть список команд.")
 	}
 }
 
@@ -241,32 +253,37 @@ func FormatReportWithSettings(report domain.AnalysisReport, settings config.Sett
 	})
 
 	lines := []string{
-		fmt.Sprintf("Diatune Safe %s", appversion.Semver()),
-		fmt.Sprintf("Пациент: %s | Отчет: #%v", report.PatientID, derefInt64(report.RunID)),
+		fmt.Sprintf("🩺 Отчет Diatune Safe %s", appversion.Semver()),
+		fmt.Sprintf("Пациент: %s", report.PatientID),
+		fmt.Sprintf("Номер отчета: #%v", derefInt64(report.RunID)),
 		fmt.Sprintf("Сформирован: %s", formatTS(report.GeneratedAt, settings.Timezone)),
 		fmt.Sprintf("Период: %s..%s", formatDate(report.PeriodStart, settings.Timezone), formatDate(report.PeriodEnd, settings.Timezone)),
 		"",
-		fmt.Sprintf("Сводка: open=%d | blocked=%d | гипо=%d", len(openRecs), len(blockedRecs), report.GlobalHypoEvents),
+		"Коротко:",
+		fmt.Sprintf("• К выполнению: %d", len(openRecs)),
+		fmt.Sprintf("• Заблокировано фильтрами: %d", len(blockedRecs)),
+		fmt.Sprintf("• События гипо за период: %d", report.GlobalHypoEvents),
 	}
 	if len(report.Warnings) > 0 {
-		lines = append(lines, "", "Предупреждения:")
+		lines = append(lines, "", "На что обратить внимание:")
 		limit := 3
 		if len(report.Warnings) < limit {
 			limit = len(report.Warnings)
 		}
-		for i, w := range report.Warnings[:limit] {
-			lines = append(lines, fmt.Sprintf("%d. %s", i+1, w))
+		for _, w := range report.Warnings[:limit] {
+			lines = append(lines, fmt.Sprintf("• %s", w))
 		}
 		if len(report.Warnings) > limit {
 			lines = append(lines, fmt.Sprintf("... и еще %d", len(report.Warnings)-limit))
 		}
 	}
 
-	lines = append(lines, "", "Рекомендации для AAPS (TOP 5):")
+	lines = append(lines, "", "Что можно изменить сейчас:")
 	if len(openRecs) == 0 {
-		lines = append(lines, "Сейчас нет открытых предложений. Проверь /weekstats и накопление данных.")
+		lines = append(lines, "• Сейчас безопасных изменений не найдено.")
+		lines = append(lines, "• Проверьте /weekstats или накопите больше данных.")
 	} else {
-		limit := 5
+		limit := 4
 		if len(openRecs) < limit {
 			limit = len(openRecs)
 		}
@@ -274,55 +291,62 @@ func FormatReportWithSettings(report domain.AnalysisReport, settings config.Sett
 			lines = append(lines, formatRecommendation(i+1, rec, settings))
 		}
 		if len(openRecs) > limit {
-			lines = append(lines, fmt.Sprintf("... еще %d открытых рекомендаций в БД.", len(openRecs)-limit))
+			rest := len(openRecs) - limit
+			lines = append(lines, fmt.Sprintf("... еще %d %s в списке /pending.", rest, recommendationWord(rest)))
 		}
 	}
 
 	if len(blockedRecs) > 0 {
-		lines = append(lines, "", "Заблокировано (топ причин): "+joinTopBlockedReasons(blockedRecs, 3))
+		lines = append(lines, "", "Почему часть изменений заблокирована:")
+		for _, reasonLine := range topBlockedReasons(blockedRecs, 3) {
+			lines = append(lines, "• "+reasonLine)
+		}
 	}
-	lines = append(lines, "", "Важно: только ручная валидация. Детали: /pending [patient_id]")
+	lines = append(lines, "", "Проверьте каждое изменение вручную перед применением.")
+	lines = append(lines, "Полный список: /pending [patient_id] ✅")
 	return strings.Join(lines, "\n")
 }
 
 func formatRecommendation(index int, rec domain.Recommendation, settings config.Settings) string {
-	status := "OPEN"
+	status := "К выполнению"
 	if rec.Blocked {
-		status = "BLOCKED"
-	}
-	sign := ""
-	if rec.PercentChange > 0 {
-		sign = "+"
+		status = "Заблокировано"
 	}
 	id := "-"
 	if rec.ID != nil {
 		id = strconv.FormatInt(*rec.ID, 10)
 	}
-	paramTitle := strings.ToUpper(string(rec.Parameter))
-	if rec.Parameter == domain.ParameterICR {
-		paramTitle = "IC"
-	}
-
-	header := fmt.Sprintf("%d) %s [%s] %s: %s%.1f%% (conf %.2f, %s)",
-		index, rec.BlockName, paramTitle, status, sign, rec.PercentChange, rec.Confidence, id)
-	valueLine := fmt.Sprintf("   Было/станет: %.2f -> %.2f", rec.CurrentValue, rec.ProposedValue)
-	if rec.Parameter == domain.ParameterISF && strings.ToLower(settings.GlucoseUnit) != "mgdl" {
-		valueLine += fmt.Sprintf(" mg/dL/U (%.2f -> %.2f mmol/L/U)",
-			mgdlToMmol(rec.CurrentValue), mgdlToMmol(rec.ProposedValue))
-	}
-
+	label := parameterLabel(rec.Parameter)
+	action := recommendationAction(rec)
+	change := fmt.Sprintf("%.1f", abs(rec.PercentChange))
 	lines := []string{
-		header,
-		valueLine,
-		"   AAPS: " + aapsPatchLine(rec, settings),
+		fmt.Sprintf("%d) [%s] %s - %s", index, rec.BlockName, label, status),
+		fmt.Sprintf("   Что сделать: %s (%s%%)", action, change),
+		"   " + recommendationValues(rec, settings),
+		fmt.Sprintf("   Уверенность алгоритма: %.2f (id=%s)", rec.Confidence, id),
 	}
 	if rec.BlockedReason != "" {
 		lines = append(lines, "   Причина блокировки: "+rec.BlockedReason)
+		return strings.Join(lines, "\n")
 	}
+	lines = append(lines, "   В AAPS: "+aapsPatchLine(rec, settings))
 	if len(rec.Rationale) > 0 && !rec.Blocked {
-		lines = append(lines, "   Обоснование: "+firstSentence(rec.Rationale[0]))
+		lines = append(lines, "   Почему: "+firstSentence(rec.Rationale[0]))
 	}
 	return strings.Join(lines, "\n")
+}
+
+func formatRecommendationCompact(index int, rec domain.Recommendation, settings config.Settings) string {
+	state := "к выполнению"
+	if rec.Blocked {
+		state = "заблокировано"
+	}
+	line := fmt.Sprintf("%d) [%s] %s | %s | %.1f%% | уверенность %.2f",
+		index, rec.BlockName, parameterLabel(rec.Parameter), state, abs(rec.PercentChange), rec.Confidence)
+	if rec.Blocked {
+		return line + "\n   Причина: " + fallbackText(rec.BlockedReason, "ограничение безопасности")
+	}
+	return line + "\n   В AAPS: " + aapsPatchLine(rec, settings)
 }
 
 func SplitForTelegram(text string, maxRunes int) []string {
@@ -400,28 +424,42 @@ func FormatBacktestReport(report domain.BacktestReport) string {
 }
 
 func FormatBacktestReportWithSettings(report domain.BacktestReport, settings config.Settings) string {
+	tir := report.OverallMetrics.TimeInRangePct
 	lines := []string{
-		fmt.Sprintf("Бэктест [%s]", report.PatientID),
-		fmt.Sprintf("Период: %s..%s (%d дн., source=%s)",
-			formatDate(report.PeriodStart, settings.Timezone), formatDate(report.PeriodEnd, settings.Timezone), report.Days, report.DataSource),
-		fmt.Sprintf("TIR 3.9-10.0 mmol/L (70-180): %.1f%% | <3.9: %.1f%% | <3.0: %.1f%%",
-			report.OverallMetrics.TimeInRangePct, report.OverallMetrics.Below70Pct, report.OverallMetrics.Below54Pct),
-		fmt.Sprintf("Средняя: %.1f mmol/L (%.1f mg/dL) | CV: %.1f%% | GMI: %.2f",
-			mgdlToMmol(report.OverallMetrics.MeanGlucoseMgdl), report.OverallMetrics.MeanGlucoseMgdl, report.OverallMetrics.CVPct, report.OverallMetrics.GMI),
-		fmt.Sprintf("Рекомендации: open=%d blocked=%d total=%d conf=%.2f",
-			report.OverallRecommendations.Open, report.OverallRecommendations.Blocked,
+		"📚 Проверка алгоритма на истории",
+		fmt.Sprintf("Пациент: %s", report.PatientID),
+		fmt.Sprintf("Период: %s..%s (%d дн., источник: %s)",
+			formatDate(report.PeriodStart, settings.Timezone), formatDate(report.PeriodEnd, settings.Timezone), report.Days, dataSourceLabel(report.DataSource)),
+		"",
+		"Главные метрики:",
+		fmt.Sprintf("• В диапазоне (TIR 3.9-10.0): %.1f%%", tir),
+		fmt.Sprintf("• Ниже 3.9 ммоль/л: %.1f%%", report.OverallMetrics.Below70Pct),
+		fmt.Sprintf("• Ниже 3.0 ммоль/л: %.1f%%", report.OverallMetrics.Below54Pct),
+		fmt.Sprintf("• Средняя глюкоза: %.1f ммоль/л (%.1f mg/dL)",
+			mgdlToMmol(report.OverallMetrics.MeanGlucoseMgdl), report.OverallMetrics.MeanGlucoseMgdl),
+		fmt.Sprintf("• Вариативность (CV): %.1f%%", report.OverallMetrics.CVPct),
+		fmt.Sprintf("• Прогноз HbA1c (GMI): %.2f", report.OverallMetrics.GMI),
+		"",
+		"Рекомендации алгоритма:",
+		fmt.Sprintf("• К выполнению: %d", report.OverallRecommendations.Open),
+		fmt.Sprintf("• Заблокировано: %d", report.OverallRecommendations.Blocked),
+		fmt.Sprintf("• Всего: %d (средняя уверенность %.2f)",
 			report.OverallRecommendations.Total, report.OverallRecommendations.AvgConfidence),
-		fmt.Sprintf("Внутренний quality-score: %.1f/100", report.AverageQualityScore),
+		fmt.Sprintf("• Оценка качества: %.1f/100 (%s)", report.AverageQualityScore, qualityLabel(report.AverageQualityScore)),
+		"",
+		"Как читать метрики:",
+		"• TIR - процент времени в целевом диапазоне. Чем выше, тем лучше.",
+		"• <3.9 и <3.0 - риск гипогликемии. Чем ниже, тем безопаснее.",
 	}
 
 	if len(report.Daily) > 0 {
-		lines = append(lines, "Последние дни:")
+		lines = append(lines, "", "Последние 3 дня:")
 		start := len(report.Daily) - 3
 		if start < 0 {
 			start = 0
 		}
 		for _, day := range report.Daily[start:] {
-			lines = append(lines, fmt.Sprintf("- %s: score %.1f | TIR %.1f%% | <3.9 %.1f%%",
+			lines = append(lines, fmt.Sprintf("• %s: качество %.1f/100 | TIR %.1f%% | <3.9 %.1f%%",
 				day.Date, day.QualityScore, day.Metrics.TimeInRangePct, day.Metrics.Below70Pct))
 		}
 	}
@@ -440,22 +478,33 @@ func FormatWeeklyStatsWithSettings(report domain.WeeklyStatsReport, settings con
 		return ""
 	}
 	lines := []string{
-		fmt.Sprintf("Еженедельная статистика [%s]", report.PatientID),
-		fmt.Sprintf("Текущий период: %s..%s (%d дн., source=%s)",
+		"📅 Сравнение недели к неделе",
+		fmt.Sprintf("Пациент: %s", report.PatientID),
+		fmt.Sprintf("Текущий период: %s..%s (%d дн., источник: %s)",
 			formatDate(report.CurrentStart, settings.Timezone), formatDate(report.CurrentEnd, settings.Timezone),
-			report.LookbackDays, report.DataSource),
-		fmt.Sprintf("CGM сэмплы: текущая=%d, прошлая=%d", report.CurrentMetrics.Samples, report.PreviousMetrics.Samples),
-		fmt.Sprintf("TIR 3.9-10.0: %.1f%% (%s%.1f п.п.)", report.CurrentMetrics.TimeInRangePct, sign(report.DeltaTIRPct), report.DeltaTIRPct),
-		fmt.Sprintf("<3.9: %.1f%% (%s%.1f п.п.)", report.CurrentMetrics.Below70Pct, sign(report.DeltaBelow70Pct), report.DeltaBelow70Pct),
-		fmt.Sprintf("Средняя: %.1f mmol/L (%s%.1f mmol/L)",
-			mgdlToMmol(report.CurrentMetrics.MeanGlucoseMgdl), sign(mgdlToMmol(report.DeltaMeanGlucoseMgdl)), mgdlToMmol(report.DeltaMeanGlucoseMgdl)),
-		fmt.Sprintf("CV: %.1f%% (%s%.1fpp)", report.CurrentMetrics.CVPct, sign(report.DeltaCVPct), report.DeltaCVPct),
-		fmt.Sprintf("Рекомендации алгоритма: open=%d blocked=%d total=%d conf=%.2f",
+			report.LookbackDays, dataSourceLabel(report.DataSource)),
+		fmt.Sprintf("Предыдущий период: %s..%s", formatDate(report.PreviousStart, settings.Timezone), formatDate(report.PreviousEnd, settings.Timezone)),
+		"",
+		"Текущие показатели:",
+		fmt.Sprintf("• TIR (3.9-10.0): %.1f%%", report.CurrentMetrics.TimeInRangePct),
+		fmt.Sprintf("• Ниже 3.9 ммоль/л: %.1f%%", report.CurrentMetrics.Below70Pct),
+		fmt.Sprintf("• Средняя глюкоза: %.1f ммоль/л", mgdlToMmol(report.CurrentMetrics.MeanGlucoseMgdl)),
+		fmt.Sprintf("• CV: %.1f%%", report.CurrentMetrics.CVPct),
+		"",
+		"Изменение к прошлой неделе:",
+		fmt.Sprintf("• TIR: %s%.1f п.п. (%s)", sign(report.DeltaTIRPct), report.DeltaTIRPct, deltaQualityLabel(report.DeltaTIRPct, true)),
+		fmt.Sprintf("• <3.9: %s%.1f п.п. (%s)", sign(report.DeltaBelow70Pct), report.DeltaBelow70Pct, deltaQualityLabel(report.DeltaBelow70Pct, false)),
+		fmt.Sprintf("• Средняя глюкоза: %s%.1f ммоль/л (%s)",
+			sign(mgdlToMmol(report.DeltaMeanGlucoseMgdl)), mgdlToMmol(report.DeltaMeanGlucoseMgdl), deltaQualityLabel(mgdlToMmol(report.DeltaMeanGlucoseMgdl), false)),
+		fmt.Sprintf("• CV: %s%.1f п.п. (%s)", sign(report.DeltaCVPct), report.DeltaCVPct, deltaQualityLabel(report.DeltaCVPct, false)),
+		"",
+		fmt.Sprintf("Рекомендации алгоритма: к выполнению %d, заблокировано %d, всего %d, средняя уверенность %.2f",
 			report.CurrentRecommendations.Open, report.CurrentRecommendations.Blocked,
 			report.CurrentRecommendations.Total, report.CurrentRecommendations.AvgConfidence),
+		fmt.Sprintf("CGM-точек: текущий период %d, прошлый %d", report.CurrentMetrics.Samples, report.PreviousMetrics.Samples),
 	}
 	if report.PreviousMetrics.Samples < 50 {
-		lines = append(lines, "Внимание: в прошлом периоде мало данных, дельты могут быть нерепрезентативны.")
+		lines = append(lines, "Внимание: в прошлом периоде мало данных, сравнение может быть неточным.")
 	}
 	return strings.Join(lines, "\n")
 }
@@ -463,14 +512,14 @@ func FormatWeeklyStatsWithSettings(report domain.WeeklyStatsReport, settings con
 func aapsPatchLine(rec domain.Recommendation, settings config.Settings) string {
 	switch rec.Parameter {
 	case domain.ParameterICR:
-		return fmt.Sprintf("Профиль -> Carbs/IC [%s] = %.2f g/U", rec.BlockName, rec.ProposedValue)
+		return fmt.Sprintf("Профиль -> Углеводы/Инсулин (IC) [%s] = %.2f г/Ед", rec.BlockName, rec.ProposedValue)
 	case domain.ParameterISF:
 		if strings.ToLower(settings.GlucoseUnit) == "mgdl" {
-			return fmt.Sprintf("Профиль -> ISF [%s] = %.2f mg/dL/U", rec.BlockName, rec.ProposedValue)
+			return fmt.Sprintf("Профиль -> ISF [%s] = %.2f mg/dL/Ед", rec.BlockName, rec.ProposedValue)
 		}
-		return fmt.Sprintf("Профиль -> ISF [%s] = %.2f mmol/L/U", rec.BlockName, mgdlToMmol(rec.ProposedValue))
+		return fmt.Sprintf("Профиль -> ISF [%s] = %.2f ммоль/л/Ед", rec.BlockName, mgdlToMmol(rec.ProposedValue))
 	case domain.ParameterBasal:
-		return fmt.Sprintf("Профиль -> Basal [%s] = %.2f U/h", rec.BlockName, rec.ProposedValue)
+		return fmt.Sprintf("Профиль -> Базал [%s] = %.2f Ед/ч", rec.BlockName, rec.ProposedValue)
 	default:
 		return fmt.Sprintf("[%s] = %.2f", rec.BlockName, rec.ProposedValue)
 	}
@@ -514,9 +563,9 @@ func splitRecommendations(recs []domain.Recommendation) ([]domain.Recommendation
 	return openRecs, blockedRecs
 }
 
-func joinTopBlockedReasons(recs []domain.Recommendation, top int) string {
+func topBlockedReasons(recs []domain.Recommendation, top int) []string {
 	if len(recs) == 0 {
-		return "-"
+		return []string{}
 	}
 	counts := map[string]int{}
 	for _, rec := range recs {
@@ -539,11 +588,137 @@ func joinTopBlockedReasons(recs []domain.Recommendation, top int) string {
 	if top <= 0 || top > len(items) {
 		top = len(items)
 	}
-	parts := make([]string, 0, top)
+	lines := make([]string, 0, top)
 	for _, item := range items[:top] {
-		parts = append(parts, fmt.Sprintf("%s (%d)", item.reason, item.count))
+		lines = append(lines, fmt.Sprintf("%s (%d)", item.reason, item.count))
 	}
-	return strings.Join(parts, "; ")
+	return lines
+}
+
+func parameterLabel(p domain.ParameterName) string {
+	switch p {
+	case domain.ParameterICR:
+		return "УК (IC)"
+	case domain.ParameterISF:
+		return "ФЧИ (ISF)"
+	case domain.ParameterBasal:
+		return "Базал"
+	default:
+		return strings.ToUpper(string(p))
+	}
+}
+
+func recommendationAction(rec domain.Recommendation) string {
+	if rec.Blocked {
+		return "изменение заблокировано"
+	}
+	up := rec.PercentChange > 0
+	switch rec.Parameter {
+	case domain.ParameterICR:
+		if up {
+			return "увеличить УК"
+		}
+		return "уменьшить УК"
+	case domain.ParameterISF:
+		if up {
+			return "увеличить ФЧИ"
+		}
+		return "уменьшить ФЧИ"
+	case domain.ParameterBasal:
+		if up {
+			return "увеличить базал"
+		}
+		return "уменьшить базал"
+	default:
+		if up {
+			return "увеличить параметр"
+		}
+		return "уменьшить параметр"
+	}
+}
+
+func recommendationValues(rec domain.Recommendation, settings config.Settings) string {
+	switch rec.Parameter {
+	case domain.ParameterICR:
+		return fmt.Sprintf("Было/станет: %.2f -> %.2f г/Ед", rec.CurrentValue, rec.ProposedValue)
+	case domain.ParameterBasal:
+		return fmt.Sprintf("Было/станет: %.2f -> %.2f Ед/ч", rec.CurrentValue, rec.ProposedValue)
+	case domain.ParameterISF:
+		if strings.ToLower(settings.GlucoseUnit) == "mgdl" {
+			return fmt.Sprintf("Было/станет: %.2f -> %.2f mg/dL/Ед", rec.CurrentValue, rec.ProposedValue)
+		}
+		return fmt.Sprintf("Было/станет: %.2f -> %.2f ммоль/л/Ед (%.2f -> %.2f mg/dL/Ед)",
+			mgdlToMmol(rec.CurrentValue), mgdlToMmol(rec.ProposedValue), rec.CurrentValue, rec.ProposedValue)
+	default:
+		return fmt.Sprintf("Было/станет: %.2f -> %.2f", rec.CurrentValue, rec.ProposedValue)
+	}
+}
+
+func fallbackText(v string, fallback string) string {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return fallback
+	}
+	return v
+}
+
+func qualityLabel(score float64) string {
+	switch {
+	case score >= 80:
+		return "отлично"
+	case score >= 65:
+		return "хорошо"
+	case score >= 50:
+		return "удовлетворительно"
+	default:
+		return "требует внимания"
+	}
+}
+
+func deltaQualityLabel(delta float64, higherIsBetter bool) string {
+	if higherIsBetter {
+		switch {
+		case delta > 1.0:
+			return "лучше"
+		case delta < -1.0:
+			return "хуже"
+		default:
+			return "без существенных изменений"
+		}
+	}
+
+	switch {
+	case delta < -1.0:
+		return "лучше"
+	case delta > 1.0:
+		return "хуже"
+	default:
+		return "без существенных изменений"
+	}
+}
+
+func recommendationWord(n int) string {
+	mod10 := n % 10
+	mod100 := n % 100
+	switch {
+	case mod10 == 1 && mod100 != 11:
+		return "рекомендация"
+	case mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14):
+		return "рекомендации"
+	default:
+		return "рекомендаций"
+	}
+}
+
+func dataSourceLabel(v string) string {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "synthetic":
+		return "синтетические данные"
+	case "nightscout":
+		return "Nightscout"
+	default:
+		return fallbackText(v, "неизвестно")
+	}
 }
 
 func firstSentence(raw string) string {
