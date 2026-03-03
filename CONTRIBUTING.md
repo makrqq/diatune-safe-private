@@ -1,28 +1,28 @@
-# Contributing
+# Вклад в проект
 
-Thanks for considering a contribution.
+Спасибо за интерес к проекту.
 
-## Scope
+## Принципы
 
-- This project is `suggest-only`: no automatic therapy changes.
-- Safety-first behavior is mandatory for all algorithm changes.
-- Any risky behavior must be behind explicit configuration and documented.
+- Проект работает в режиме `только-предложения`: автоматическое изменение терапии недопустимо.
+- Для алгоритмических изменений безопасность всегда приоритетна.
+- Любое потенциально рискованное поведение должно быть явно включаемым через конфигурацию и отражаться в документации.
 
-## Development Setup
+## Локальный запуск
 
-1. Install Go `1.24+`.
-2. Copy env template:
+1. Установите Go `1.24+`.
+2. Скопируйте шаблон окружения:
    - `cp .env.example .env`
-3. Run tests:
+3. Запустите тесты:
    - `go test ./...`
-4. Optional local run:
+4. При необходимости запустите сервисы:
    - `go run ./cmd/diatune-safe api`
    - `go run ./cmd/diatune-safe bot`
    - `go run ./cmd/diatune-safe worker`
 
-## Pull Requests
+## Pull Request
 
-- Keep PRs focused and small.
-- Include test coverage for behavior changes.
-- Update `README.md` and `CHANGELOG.md` when user-facing behavior changes.
-- Do not commit secrets, tokens, real patient identifiers, or local history files.
+- Делайте PR узкими и сфокусированными.
+- Добавляйте тесты на изменения поведения.
+- Обновляйте `README.md` и `CHANGELOG.md` при изменениях, заметных пользователю.
+- Не коммитьте токены, секреты, реальные идентификаторы пациентов и локальные служебные файлы.
