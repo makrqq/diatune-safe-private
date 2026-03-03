@@ -1,31 +1,31 @@
 ---
-name: Bug report
-about: Report a defect in code or behavior
+name: Сообщение о баге
+about: Сообщить об ошибке в коде или поведении
 title: "[BUG] "
 labels: bug
 assignees: ""
 ---
 
-## What happened
+## Что произошло
 
-Describe the bug clearly.
+Опишите проблему коротко и понятно.
 
-## Steps to reproduce
+## Как воспроизвести
 
 1.
 2.
 3.
 
-## Expected behavior
+## Что ожидалось
 
-What did you expect instead?
+Какое поведение вы ожидали?
 
-## Environment
+## Окружение
 
-- Version/commit:
-- Mode (`api`/`bot`/`worker`):
-- Data source (`nightscout`/`synthetic`):
+- Версия/коммит:
+- Режим (`api`/`bot`/`worker`):
+- Источник данных (`nightscout`/`synthetic`):
 
-## Logs or screenshots
+## Логи или скриншоты
 
-Paste only non-sensitive logs.
+Прикладывайте только логи без персональных и секретных данных.
