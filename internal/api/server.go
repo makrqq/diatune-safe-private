@@ -58,6 +58,8 @@ func (s *Server) Router() http.Handler {
 		r.Get("/patients/{patient_id}/profile", s.handleGetProfile)
 		r.Put("/patients/{patient_id}/profile", s.handlePutProfile)
 		r.Post("/patients/{patient_id}/analyze", s.handleAnalyze)
+		r.Get("/patients/{patient_id}/backtest", s.handleBacktest)
+		r.Get("/patients/{patient_id}/weekly-stats", s.handleWeeklyStats)
 		r.Get("/patients/{patient_id}/reports/latest", s.handleLatestReport)
 		r.Get("/patients/{patient_id}/reports", s.handleListReports)
 		r.Get("/patients/{patient_id}/recommendations/pending", s.handlePendingRecommendations)
@@ -162,6 +164,38 @@ func (s *Server) handleLatestReport(w http.ResponseWriter, r *http.Request) {
 	}
 	if report == nil {
 		writeJSON(w, http.StatusNotFound, map[string]string{"detail": "No report found."})
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
+}
+
+func (s *Server) handleBacktest(w http.ResponseWriter, r *http.Request) {
+	patientID := chi.URLParam(r, "patient_id")
+	days := parseIntDefault(r.URL.Query().Get("days"), 42)
+	if days < 7 || days > 180 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"detail": "days must be in 7..180"})
+		return
+	}
+	preferRealData := parseBoolDefault(r.URL.Query().Get("prefer_real_data"), true)
+	report, err := s.service.RunBacktest(r.Context(), patientID, days, preferRealData)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"detail": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
+}
+
+func (s *Server) handleWeeklyStats(w http.ResponseWriter, r *http.Request) {
+	patientID := chi.URLParam(r, "patient_id")
+	days := parseIntDefault(r.URL.Query().Get("days"), s.settings.WeeklyStatsLookbackDays)
+	if days < 3 || days > 30 {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"detail": "days must be in 3..30"})
+		return
+	}
+	preferRealData := parseBoolDefault(r.URL.Query().Get("prefer_real_data"), true)
+	report, err := s.service.GetWeeklyStats(r.Context(), patientID, days, preferRealData)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"detail": err.Error()})
 		return
 	}
 	writeJSON(w, http.StatusOK, report)
