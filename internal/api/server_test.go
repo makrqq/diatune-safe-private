@@ -67,6 +67,22 @@ func TestAPIFlow(t *testing.T) {
 		t.Fatalf("latest status: %d", resp.Code)
 	}
 
+	req = httptest.NewRequest(http.MethodGet, "/v1/patients/demo/backtest?days=14&prefer_real_data=false", nil)
+	req.Header.Set("X-API-Key", "secret")
+	resp = httptest.NewRecorder()
+	h.ServeHTTP(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("backtest status: %d body=%s", resp.Code, resp.Body.String())
+	}
+
+	req = httptest.NewRequest(http.MethodGet, "/v1/patients/demo/weekly-stats?days=7&prefer_real_data=false", nil)
+	req.Header.Set("X-API-Key", "secret")
+	resp = httptest.NewRecorder()
+	h.ServeHTTP(resp, req)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("weekly-stats status: %d body=%s", resp.Code, resp.Body.String())
+	}
+
 	req = httptest.NewRequest(http.MethodGet, "/v1/patients/demo/recommendations/pending", nil)
 	req.Header.Set("X-API-Key", "secret")
 	resp = httptest.NewRecorder()
