@@ -381,6 +381,6 @@ func ptrInt64(v int64) *int64 {
 
 func Must(err error) {
 	if err != nil {
-		panic(fmt.Sprintf("repository error: %v", err))
+		panic(fmt.Sprintf("ошибка репозитория: %v", err))
 	}
 }
