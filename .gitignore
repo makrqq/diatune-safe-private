@@ -6,6 +6,8 @@ data/
 .gomodcache/
 .gotmp/
 .go/
+.publish_tmp/
+.bash_history
 
 .venv/
 .uv/
