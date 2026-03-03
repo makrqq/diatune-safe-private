@@ -50,6 +50,8 @@ mapfile -d '' FILES < <(find . -type f \
   ! -path './.pytest_cache/*' \
   ! -path './data/*' \
   ! -path './release/diatune-safe-linux-amd64' \
+  ! -name '.tmp*' \
+  ! -name 'tmp_*' \
   ! -path './uv' \
   ! -path './tools/gh' \
   ! -name '.env' \
