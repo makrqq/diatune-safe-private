@@ -20,11 +20,13 @@ Open-source платформа для безопасной настройки п
   - эффективность корректировок,
   - дрейф в голодном окне,
   - робастная статистика (`MAD`, winsorized mean),
-  - оценка вариативности и согласованности сигналов.
+  - оценка вариативности и согласованности сигналов,
+  - вероятностная модель решения (Monte Carlo): вероятность пользы, риск гипо, авто-масштабирование шага.
 - Safety policy:
   - лимит суточного шага,
   - блокировки по гипо,
   - блокировки по low-confidence,
+  - блокировки по вероятностному риску,
   - физиологические границы параметров.
 - Полный audit trail в SQLite:
   - профили,
@@ -32,10 +34,13 @@ Open-source платформа для безопасной настройки п
   - рекомендации,
   - ручные подтверждения.
 - REST API, Telegram-бот, scheduler worker.
+- Backtest-валидация и weekly quality monitoring.
+- Локализация под РФ: форматы дат, mmol/L в отчетах, timezone `Europe/Moscow`.
+- Рекомендации сразу в терминах профиля AAPS (`IC`, `ISF`, `Basal`) по временным блокам.
 
 ## Архитектура
 
-- `cmd/diatune-safe/main.go` — единый CLI (`api`, `bot`, `worker`, `analyze`, `bootstrap`)
+- `cmd/diatune-safe/main.go` — единый CLI (`api`, `bot`, `worker`, `analyze`, `bootstrap`, `backtest`, `weekstats`)
 - `internal/config` — env-конфигурация
 - `internal/datasource` — Nightscout/synthetic источники
 - `internal/engine` — алгоритмы рекомендаций
@@ -94,6 +99,8 @@ go run ./cmd/diatune-safe bot
 Команды:
 
 - `/analyze [patient_id] [days]`
+- `/backtest [patient_id] [days]`
+- `/weekstats [patient_id] [days]`
 - `/latest [patient_id]`
 - `/pending [patient_id]`
 - `/ack <recommendation_id> [reviewer]`
@@ -105,6 +112,18 @@ go run ./cmd/diatune-safe bot
 - `AUTO_ANALYSIS_ENABLED=true`
 - `AUTO_ANALYSIS_INTERVAL_MINUTES=360`
 - `AUTO_ANALYSIS_PATIENT_IDS=patient-a,patient-b`
+- `MONTE_CARLO_SAMPLES=1200`
+- `MIN_BENEFIT_PROBABILITY=0.58`
+- `MAX_HYPO_RISK_PROBABILITY=0.22`
+- `DAILY_RECOMMENDATION_ENABLED=true`
+- `DAILY_RECOMMENDATION_TIME=22:00` (формат `HH:MM`)
+- `DAILY_RECOMMENDATION_PATIENT_IDS=patient-a,patient-b` (опционально)
+- `WEEKLY_STATS_ENABLED=true`
+- `WEEKLY_STATS_DAY=mon` (`sun..sat`)
+- `WEEKLY_STATS_TIME=21:00` (формат `HH:MM`)
+- `WEEKLY_STATS_LOOKBACK_DAYS=7`
+- `WEEKLY_STATS_PATIENT_IDS=patient-a,patient-b` (опционально)
+- `TIMEZONE=Europe/Moscow` (чтобы `DAILY_RECOMMENDATION_TIME` работал в нужной зоне)
 
 Запуск:
 
@@ -130,6 +149,8 @@ go run ./cmd/diatune-safe worker --patients patient-a,patient-b
 - `GET /v1/patients/{patient_id}/profile`
 - `PUT /v1/patients/{patient_id}/profile`
 - `POST /v1/patients/{patient_id}/analyze?days=14&prefer_real_data=true`
+- `GET /v1/patients/{patient_id}/backtest?days=42&prefer_real_data=true`
+- `GET /v1/patients/{patient_id}/weekly-stats?days=7&prefer_real_data=true`
 - `GET /v1/patients/{patient_id}/reports/latest`
 - `GET /v1/patients/{patient_id}/reports?limit=20`
 - `GET /v1/patients/{patient_id}/recommendations/pending`
