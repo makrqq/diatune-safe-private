@@ -10,6 +10,7 @@ Open-source платформа для безопасной настройки п
 - Это не медицинское изделие и не замена врачу.
 - Любые изменения коэффициентов подтверждаются человеком.
 - Агрессивные рекомендации автоматически блокируются при риске гипогликемий.
+- Проект не является медицинским изделием.
 
 ## Что реализовано
 
@@ -113,8 +114,8 @@ go run ./cmd/diatune-safe bot
 - `AUTO_ANALYSIS_INTERVAL_MINUTES=360`
 - `AUTO_ANALYSIS_PATIENT_IDS=patient-a,patient-b`
 - `MONTE_CARLO_SAMPLES=1200`
-- `MIN_BENEFIT_PROBABILITY=0.58`
-- `MAX_HYPO_RISK_PROBABILITY=0.22`
+- `MIN_BENEFIT_PROBABILITY=0.35`
+- `MAX_HYPO_RISK_PROBABILITY=0.60`
 - `DAILY_RECOMMENDATION_ENABLED=true`
 - `DAILY_RECOMMENDATION_TIME=22:00` (формат `HH:MM`)
 - `DAILY_RECOMMENDATION_PATIENT_IDS=patient-a,patient-b` (опционально)
@@ -193,3 +194,10 @@ GH_TOKEN=... ./scripts/publish_private_repo.sh myuser/diatune-safe-private
 ## Лицензирование
 
 MIT (`LICENSE`).
+
+## Процессы OSS
+
+- История изменений: `CHANGELOG.md`
+- Как контрибьютить: `CONTRIBUTING.md`
+- Политика безопасности: `SECURITY.md`
+- Кодекс поведения: `CODE_OF_CONDUCT.md`
