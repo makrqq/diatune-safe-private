@@ -1,16 +1,16 @@
-## Summary
+## Кратко
 
-- What changed?
-- Why was this change needed?
+- Что изменилось?
+- Зачем это было нужно?
 
-## Safety Checklist
+## Чеклист безопасности
 
-- [ ] No automatic therapy changes introduced.
-- [ ] Risk-increasing behavior is guarded by config.
-- [ ] Docs updated for user-visible behavior.
-- [ ] No secrets or personal data included.
+- [ ] Не добавлены автоматические изменения терапии.
+- [ ] Поведение с повышенным риском защищено настройками.
+- [ ] Документация обновлена для пользовательских изменений.
+- [ ] В PR нет секретов и персональных данных.
 
-## Testing
+## Проверка
 
 - [ ] `go test ./...`
-- [ ] Relevant manual checks performed
+- [ ] Выполнены релевантные ручные проверки
