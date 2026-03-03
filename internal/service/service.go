@@ -79,7 +79,7 @@ func (s *Service) RunAnalysis(ctx context.Context, patientID string, days int, p
 	if err != nil {
 		return domain.AnalysisReport{}, err
 	}
-	dataset, err := s.loadDataset(ctx, patientID, periodStart, periodEnd, preferRealData)
+	dataset, _, err := s.loadDatasetWithSource(ctx, patientID, periodStart, periodEnd, preferRealData)
 	if err != nil {
 		return domain.AnalysisReport{}, err
 	}
@@ -126,11 +126,11 @@ func (s *Service) AcknowledgeRecommendation(recommendationID int64, reviewer str
 	return s.repo.AcknowledgeRecommendation(recommendationID, reviewer)
 }
 
-func (s *Service) loadDataset(ctx context.Context, patientID string, periodStart, periodEnd time.Time, preferReal bool) (domain.PatientDataset, error) {
+func (s *Service) loadDatasetWithSource(ctx context.Context, patientID string, periodStart, periodEnd time.Time, preferReal bool) (domain.PatientDataset, string, error) {
 	if preferReal && s.nightscout != nil {
 		dataset, err := s.nightscout.FetchDataset(ctx, patientID, periodStart, periodEnd)
 		if err == nil && len(dataset.Glucose) > 0 {
-			return dataset, nil
+			return dataset, "nightscout", nil
 		}
 		if err != nil {
 			log.Printf("nightscout fetch failed (%v), using synthetic fallback", err)
@@ -138,7 +138,16 @@ func (s *Service) loadDataset(ctx context.Context, patientID string, periodStart
 			log.Printf("nightscout returned empty glucose dataset, using synthetic fallback")
 		}
 	}
-	return s.synthetic.FetchDataset(ctx, patientID, periodStart, periodEnd)
+	dataset, err := s.synthetic.FetchDataset(ctx, patientID, periodStart, periodEnd)
+	if err != nil {
+		return domain.PatientDataset{}, "", err
+	}
+	return dataset, "synthetic", nil
+}
+
+func (s *Service) loadDataset(ctx context.Context, patientID string, periodStart, periodEnd time.Time, preferReal bool) (domain.PatientDataset, error) {
+	dataset, _, err := s.loadDatasetWithSource(ctx, patientID, periodStart, periodEnd, preferReal)
+	return dataset, err
 }
 
 func (s *Service) defaultProfile(patientID string) domain.PatientProfile {
