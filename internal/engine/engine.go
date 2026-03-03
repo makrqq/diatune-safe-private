@@ -2,6 +2,7 @@ package engine
 
 import (
 	"math"
+	"math/rand"
 	"sort"
 	"strconv"
 	"time"
@@ -61,6 +62,8 @@ func (e Engine) buildStats(profile domain.PatientProfile, dataset domain.Patient
 
 		postprandial := e.postprandialDeltas(blockCarbs, dataset.Glucose)
 		correctionRatios := e.correctionEffectivenessRatios(dataset.Glucose, blockInsulin, dataset.Carbs, blockSettings.ISF)
+		mealCarbs := carbGrams(blockCarbs)
+		correctionUnits := correctionBolusUnits(blockInsulin, dataset.Carbs)
 		fastingDrift, fastingHours, fastingSamples := e.fastingDrift(blockGlucose, dataset.Carbs, dataset.Insulin)
 
 		statsList = append(statsList, domain.BlockStats{
@@ -71,6 +74,8 @@ func (e Engine) buildStats(profile domain.PatientProfile, dataset domain.Patient
 			FastingSamples:          fastingSamples,
 			HypoEvents:              countEpisodes(blockGlucose, float64(e.settings.HypoThresholdMgdl), "below", 20*time.Minute),
 			HyperEvents:             countEpisodes(blockGlucose, float64(e.settings.HyperThresholdMgdl), "above", 20*time.Minute),
+			AvgMealCarbs:            stats.RobustMean(mealCarbs),
+			AvgCorrectionUnits:      stats.RobustMean(correctionUnits),
 			MeanPostprandialDelta:   stats.RobustMean(postprandial),
 			MeanCorrectionRatio:     stats.RobustMean(correctionRatios),
 			FastingDriftMgdlPerHour: fastingDrift,
@@ -121,15 +126,17 @@ func (e Engine) buildRecommendations(profile domain.PatientProfile, statsList []
 	for _, block := range profile.Blocks {
 		s := byBlock[block.Block.Name]
 		out = append(out,
-			e.recommendICR(block.ICR, block.Block.Name, s, globalHypos),
-			e.recommendISF(block.ISF, block.Block.Name, s, globalHypos),
-			e.recommendBasal(block.Basal, block.Block.Name, s, globalHypos),
+			e.recommendICR(block, s, globalHypos),
+			e.recommendISF(block, s, globalHypos),
+			e.recommendBasal(block, s, globalHypos),
 		)
 	}
 	return out
 }
 
-func (e Engine) recommendICR(current float64, blockName string, st domain.BlockStats, globalHypos int) domain.Recommendation {
+func (e Engine) recommendICR(block domain.BlockSettings, st domain.BlockStats, globalHypos int) domain.Recommendation {
+	current := block.ICR
+	blockName := block.Block.Name
 	conf := e.confidence(st.Meals, e.settings.MinMealsPerBlock, st.PostprandialVariability, false)
 	rec := domain.Recommendation{
 		Parameter:     domain.ParameterICR,
@@ -168,10 +175,33 @@ func (e Engine) recommendICR(current float64, blockName string, st domain.BlockS
 	if consistency < 0.8 {
 		rec.Rationale = append(rec.Rationale, "Сигналы еды и коррекций не полностью согласованы, шаг уменьшен.")
 	}
+
+	changeFrac := (rec.ProposedValue - current) / current
+	sim := e.simulateICR(block, st, delta, changeFrac)
+	rec.Rationale = append(rec.Rationale, e.simulationRationale(sim))
+	rec.Confidence = e.calibrateConfidence(rec.Confidence, sim)
+
+	minBenefit, maxRisk := e.probabilityThresholds(st.HypoEvents)
+	if sim.BenefitProb < minBenefit {
+		rec.Confidence *= 0.8
+		rec.Rationale = append(rec.Rationale, "Низкая вероятность пользы: ручная проверка обязательна.")
+	}
+	if sim.RiskProb > maxRisk {
+		rec.Confidence *= 0.75
+		rec.Rationale = append(rec.Rationale, "Повышенный риск гипо: применять только после ручной валидации.")
+	}
+
+	scale := e.adaptiveScale(sim)
+	rec.ProposedValue = current * (1.0 + changeFrac*scale)
+	if scale < 0.99 {
+		rec.Rationale = append(rec.Rationale, "Шаг автоматически уменьшен из-за неопределенности сигнала.")
+	}
 	return e.safety.Apply(rec, globalHypos, st.HypoEvents)
 }
 
-func (e Engine) recommendISF(current float64, blockName string, st domain.BlockStats, globalHypos int) domain.Recommendation {
+func (e Engine) recommendISF(block domain.BlockSettings, st domain.BlockStats, globalHypos int) domain.Recommendation {
+	current := block.ISF
+	blockName := block.Block.Name
 	conf := e.confidence(st.Corrections, e.settings.MinCorrectionsPerBlock, st.CorrectionVariability, true)
 	rec := domain.Recommendation{
 		Parameter:     domain.ParameterISF,
@@ -204,10 +234,33 @@ func (e Engine) recommendISF(current float64, blockName string, st domain.BlockS
 		rec.Rationale = append(rec.Rationale, "Коррекция ФЧИ не требуется.")
 		return rec
 	}
+
+	changeFrac := (rec.ProposedValue - current) / current
+	sim := e.simulateISF(block, st, ratio, changeFrac)
+	rec.Rationale = append(rec.Rationale, e.simulationRationale(sim))
+	rec.Confidence = e.calibrateConfidence(rec.Confidence, sim)
+
+	minBenefit, maxRisk := e.probabilityThresholds(st.HypoEvents)
+	if sim.BenefitProb < minBenefit {
+		rec.Confidence *= 0.8
+		rec.Rationale = append(rec.Rationale, "Низкая вероятность пользы: ручная проверка обязательна.")
+	}
+	if sim.RiskProb > maxRisk {
+		rec.Confidence *= 0.75
+		rec.Rationale = append(rec.Rationale, "Повышенный риск гипо: применять только после ручной валидации.")
+	}
+
+	scale := e.adaptiveScale(sim)
+	rec.ProposedValue = current * (1.0 + changeFrac*scale)
+	if scale < 0.99 {
+		rec.Rationale = append(rec.Rationale, "Шаг автоматически уменьшен из-за неопределенности сигнала.")
+	}
 	return e.safety.Apply(rec, globalHypos, st.HypoEvents)
 }
 
-func (e Engine) recommendBasal(current float64, blockName string, st domain.BlockStats, globalHypos int) domain.Recommendation {
+func (e Engine) recommendBasal(block domain.BlockSettings, st domain.BlockStats, globalHypos int) domain.Recommendation {
+	current := block.Basal
+	blockName := block.Block.Name
 	var variability *float64
 	if st.FastingDriftMgdlPerHour != nil {
 		v := math.Abs(*st.FastingDriftMgdlPerHour)
@@ -249,6 +302,27 @@ func (e Engine) recommendBasal(current float64, blockName string, st domain.Bloc
 		rec.Rationale = append(rec.Rationale, "Коррекция базала не требуется.")
 		return rec
 	}
+
+	changeFrac := (rec.ProposedValue - current) / current
+	sim := e.simulateBasal(block, st, drift, changeFrac)
+	rec.Rationale = append(rec.Rationale, e.simulationRationale(sim))
+	rec.Confidence = e.calibrateConfidence(rec.Confidence, sim)
+
+	minBenefit, maxRisk := e.probabilityThresholds(st.HypoEvents)
+	if sim.BenefitProb < minBenefit {
+		rec.Confidence *= 0.8
+		rec.Rationale = append(rec.Rationale, "Низкая вероятность пользы: ручная проверка обязательна.")
+	}
+	if sim.RiskProb > maxRisk {
+		rec.Confidence *= 0.75
+		rec.Rationale = append(rec.Rationale, "Повышенный риск гипо: применять только после ручной валидации.")
+	}
+
+	scale := e.adaptiveScale(sim)
+	rec.ProposedValue = current * (1.0 + changeFrac*scale)
+	if scale < 0.99 {
+		rec.Rationale = append(rec.Rationale, "Шаг автоматически уменьшен из-за неопределенности сигнала.")
+	}
 	return e.safety.Apply(rec, globalHypos, st.HypoEvents)
 }
 
@@ -267,6 +341,139 @@ func (e Engine) confidence(samples, minNeeded int, variability *float64, correct
 		penalty = clamp(((*variability)-25.0)/120.0, 0, 0.5)
 	}
 	return clamp(base*(1.0-penalty), 0, 1)
+}
+
+func (e Engine) simulationRationale(sim simulationOutcome) string {
+	return "Вероятностная оценка: польза " + formatFloat(sim.BenefitProb*100.0, 1) + "%, риск гипо " +
+		formatFloat(sim.RiskProb*100.0, 1) + "%, ожидаемый выигрыш " + formatFloat(sim.ExpectedGain, 2) +
+		" (MC n=" + strconv.Itoa(sim.Samples) + ")."
+}
+
+func (e Engine) calibrateConfidence(base float64, sim simulationOutcome) float64 {
+	conf := 0.30*base + 0.50*sim.BenefitProb + 0.20*(1.0-sim.RiskProb)
+	if sim.ExpectedGain < 0.8 {
+		conf *= 0.9
+	}
+	return clamp(conf, 0, 1)
+}
+
+func (e Engine) adaptiveScale(sim simulationOutcome) float64 {
+	margin := sim.BenefitProb - sim.RiskProb
+	scale := clamp(1.65*margin, 0.20, 1.0)
+	if sim.ExpectedGain < 1.2 {
+		scale *= 0.85
+	}
+	return clamp(scale, 0.20, 1.0)
+}
+
+func (e Engine) probabilityThresholds(blockHypos int) (minBenefit float64, maxRisk float64) {
+	minBenefit = e.settings.MinBenefitProbability
+	if minBenefit <= 0 || minBenefit >= 1 {
+		minBenefit = 0.35
+	}
+	maxRisk = e.settings.MaxHypoRiskProbability
+	if maxRisk <= 0 || maxRisk >= 1 {
+		maxRisk = 0.60
+	}
+	if blockHypos >= 2 {
+		minBenefit = clamp(minBenefit+0.03, 0, 0.95)
+		maxRisk = clamp(maxRisk-0.03, 0.05, 0.95)
+	}
+	return minBenefit, maxRisk
+}
+
+func (e Engine) monteCarloSamples() int {
+	samples := e.settings.MonteCarloSamples
+	if samples == 0 {
+		return 1200
+	}
+	return samples
+}
+
+func (e Engine) simulateICR(block domain.BlockSettings, st domain.BlockStats, meanDelta float64, changeFrac float64) simulationOutcome {
+	avgMealCarbs := 45.0
+	if st.AvgMealCarbs != nil {
+		avgMealCarbs = clamp(*st.AvgMealCarbs, 20, 120)
+	}
+	icr := math.Max(block.ICR, 2.0)
+	isf := clamp(block.ISF, 20, 150)
+	sensitivity := (avgMealCarbs / icr) * isf
+	uncertainty := standardError(st.PostprandialVariability, max(1, st.Meals), 9.0)
+	samples := e.monteCarloSamples()
+	seed := stableSeed("icr", block.Block.Name, formatFloat(meanDelta, 2), formatFloat(changeFrac, 5), strconv.Itoa(st.Meals))
+
+	return runSimulation(seed, samples,
+		func(rng *rand.Rand) float64 {
+			return normalSample(rng, meanDelta, uncertainty)
+		},
+		func(sample float64) (bool, bool, float64) {
+			predicted := sample + changeFrac*sensitivity
+			gain := math.Abs(sample) - math.Abs(predicted)
+			if gain < 0 {
+				gain = 0
+			}
+			benefit := gain > 4.0 || math.Abs(predicted) <= 22.0
+			risk := predicted < -35.0
+			return benefit, risk, gain
+		},
+	)
+}
+
+func (e Engine) simulateISF(block domain.BlockSettings, st domain.BlockStats, meanRatio float64, changeFrac float64) simulationOutcome {
+	denominator := 1.0 + changeFrac
+	if denominator < 0.2 {
+		denominator = 0.2
+	}
+	uncertainty := standardError(st.CorrectionVariability, max(1, st.Corrections), 0.08)
+	samples := e.monteCarloSamples()
+	seed := stableSeed("isf", block.Block.Name, formatFloat(meanRatio, 3), formatFloat(changeFrac, 5), strconv.Itoa(st.Corrections))
+
+	return runSimulation(seed, samples,
+		func(rng *rand.Rand) float64 {
+			sample := normalSample(rng, meanRatio, uncertainty)
+			if sample < 0 {
+				sample = 0
+			}
+			return sample
+		},
+		func(sample float64) (bool, bool, float64) {
+			predicted := sample / denominator
+			gain := math.Abs(1.0-sample) - math.Abs(1.0-predicted)
+			if gain < 0 {
+				gain = 0
+			}
+			benefit := gain > 0.03 || math.Abs(1.0-predicted) <= 0.12
+			risk := predicted > 1.30
+			return benefit, risk, gain
+		},
+	)
+}
+
+func (e Engine) simulateBasal(block domain.BlockSettings, st domain.BlockStats, meanDrift float64, changeFrac float64) simulationOutcome {
+	isfProxy := clamp(block.ISF, 25, 110)
+	sensitivity := math.Max(block.Basal*isfProxy, 1.0)
+	uncertainty := 2.2
+	if st.FastingDriftMgdlPerHour != nil {
+		uncertainty = math.Max(math.Abs(*st.FastingDriftMgdlPerHour)*0.35, 1.8)
+	}
+	samples := e.monteCarloSamples()
+	seed := stableSeed("basal", block.Block.Name, formatFloat(meanDrift, 2), formatFloat(changeFrac, 5), strconv.Itoa(st.FastingSamples))
+
+	return runSimulation(seed, samples,
+		func(rng *rand.Rand) float64 {
+			return normalSample(rng, meanDrift, uncertainty)
+		},
+		func(sample float64) (bool, bool, float64) {
+			predicted := sample - changeFrac*sensitivity
+			gain := math.Abs(sample) - math.Abs(predicted)
+			if gain < 0 {
+				gain = 0
+			}
+			benefit := gain > 1.2 || math.Abs(predicted) <= 6.0
+			risk := predicted < -10.0
+			return benefit, risk, gain
+		},
+	)
 }
 
 func icrIsfConsistency(st domain.BlockStats) float64 {
@@ -289,6 +496,40 @@ func (e Engine) postprandialDeltas(carbs []domain.CarbEvent, glucose []domain.Gl
 		post := nearestGlucose(glucose, meal.TS.Add(2*time.Hour), 30*time.Minute)
 		if pre != nil && post != nil {
 			out = append(out, post.Mgdl-pre.Mgdl)
+		}
+	}
+	return out
+}
+
+func carbGrams(carbs []domain.CarbEvent) []float64 {
+	out := make([]float64, 0, len(carbs))
+	for _, meal := range carbs {
+		if meal.Grams > 0 {
+			out = append(out, meal.Grams)
+		}
+	}
+	return out
+}
+
+func correctionBolusUnits(insulin []domain.InsulinEvent, carbs []domain.CarbEvent) []float64 {
+	out := []float64{}
+	for _, shot := range insulin {
+		if shot.Kind != "bolus" || shot.Units <= 0 {
+			continue
+		}
+		hasNearbyMeal := false
+		for _, meal := range carbs {
+			d := meal.TS.Sub(shot.TS)
+			if d < 0 {
+				d = -d
+			}
+			if d <= 35*time.Minute {
+				hasNearbyMeal = true
+				break
+			}
+		}
+		if !hasNearbyMeal {
+			out = append(out, shot.Units)
 		}
 	}
 	return out
@@ -490,6 +731,13 @@ func clamp(v, low, high float64) float64 {
 		return high
 	}
 	return v
+}
+
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func joinComma(items []string) string {
