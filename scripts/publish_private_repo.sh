@@ -43,6 +43,7 @@ mapfile -d '' FILES < <(find . -type f \
   ! -path './.venv/*' \
   ! -path './.uv/*' \
   ! -path './.go/*' \
+  ! -path './.publish_tmp/*' \
   ! -path './.gocache/*' \
   ! -path './.gomodcache/*' \
   ! -path './.gotmp/*' \
@@ -50,6 +51,7 @@ mapfile -d '' FILES < <(find . -type f \
   ! -path './.pytest_cache/*' \
   ! -path './data/*' \
   ! -path './release/diatune-safe-linux-amd64' \
+  ! -name '.bash_history' \
   ! -name '.tmp*' \
   ! -name 'tmp_*' \
   ! -path './uv' \
