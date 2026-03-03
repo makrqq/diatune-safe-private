@@ -103,10 +103,10 @@ func Load() (Settings, error) {
 	}
 
 	if s.AppPort <= 0 {
-		return Settings{}, fmt.Errorf("APP_PORT must be positive")
+		return Settings{}, fmt.Errorf("APP_PORT должен быть положительным")
 	}
 	if s.AnalysisLookbackDays <= 0 {
-		return Settings{}, fmt.Errorf("ANALYSIS_LOOKBACK_DAYS must be positive")
+		return Settings{}, fmt.Errorf("ANALYSIS_LOOKBACK_DAYS должен быть положительным")
 	}
 	if s.MonteCarloSamples < 200 {
 		s.MonteCarloSamples = 200
@@ -115,10 +115,10 @@ func Load() (Settings, error) {
 		s.MonteCarloSamples = 5000
 	}
 	if s.MinBenefitProbability < 0 || s.MinBenefitProbability > 1 {
-		return Settings{}, fmt.Errorf("MIN_BENEFIT_PROBABILITY must be in [0,1]")
+		return Settings{}, fmt.Errorf("MIN_BENEFIT_PROBABILITY должен быть в диапазоне [0,1]")
 	}
 	if s.MaxHypoRiskProbability < 0 || s.MaxHypoRiskProbability > 1 {
-		return Settings{}, fmt.Errorf("MAX_HYPO_RISK_PROBABILITY must be in [0,1]")
+		return Settings{}, fmt.Errorf("MAX_HYPO_RISK_PROBABILITY должен быть в диапазоне [0,1]")
 	}
 	if s.GlucoseUnit != "mmol" && s.GlucoseUnit != "mgdl" {
 		s.GlucoseUnit = "mmol"
