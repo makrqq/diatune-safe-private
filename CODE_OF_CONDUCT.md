@@ -1,21 +1,21 @@
-# Code of Conduct
+# Кодекс поведения
 
-## Our Pledge
+## Наше обязательство
 
-We want this project to be respectful, constructive, and safe for contributors.
+Мы поддерживаем уважительную, конструктивную и безопасную среду для участников проекта.
 
-## Expected Behavior
+## Ожидаемое поведение
 
-- Be respectful and technical.
-- Assume good intent and communicate clearly.
-- Focus discussion on facts, tests, and reproducibility.
+- Уважительное и профессиональное общение.
+- Предположение добросовестности собеседника.
+- Обсуждение на основе фактов, тестов и воспроизводимости.
 
-## Unacceptable Behavior
+## Неприемлемое поведение
 
-- Harassment, insults, or discrimination.
-- Publishing private data (including patient-sensitive info).
-- Intentionally unsafe recommendations presented as safe.
+- Оскорбления, травля, дискриминация.
+- Публикация приватных данных (включая чувствительные данные пациентов).
+- Представление потенциально опасных рекомендаций как безопасных.
 
-## Enforcement
+## Модерация
 
-Maintainers may remove content or restrict participation for violations.
+Сопровождающие проекта могут удалять контент или ограничивать участие при нарушениях.
