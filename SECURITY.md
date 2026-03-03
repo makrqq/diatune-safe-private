@@ -1,23 +1,23 @@
-# Security Policy
+# Политика безопасности
 
-## Supported Versions
+## Поддерживаемые версии
 
-This repository currently tracks one active line: `0.0.x`.
+Сейчас поддерживается одна активная ветка: `0.0.x`.
 
-## Reporting a Vulnerability
+## Сообщение об уязвимости
 
-Please do not open public issues for security problems.
+Пожалуйста, не публикуйте уязвимости в открытых issues.
 
-Report privately with:
+Передавайте информацию приватно с указанием:
 
-- clear reproduction steps,
-- potential impact,
-- affected file(s)/component(s),
-- proposed mitigation if available.
+- шагов воспроизведения,
+- потенциального влияния,
+- затронутых файлов/компонентов,
+- предлагаемого способа смягчения (если есть).
 
-Until a dedicated security contact is configured, open a private channel via repository owner settings.
+Пока отдельный security-контакт не настроен, используйте приватный канал владельца репозитория.
 
-## Medical Safety Note
+## Медицинская оговорка
 
-This software is not a medical device and is not intended to replace clinical judgment.
-All recommendations must be manually reviewed before use.
+Программа не является медицинским изделием и не заменяет клиническое решение.
+Любые рекомендации должны проходить ручную проверку перед применением.
