@@ -43,14 +43,14 @@ func (p Policy) Apply(rec domain.Recommendation, globalHypos int, blockHypos int
 		return rec
 	}
 
-	if globalHypos >= p.settings.GlobalHypoGuardLimit {
+	if globalHypos >= p.settings.GlobalHypoGuardLimit && p.isAggressive(rec) {
 		rec.Blocked = true
-		rec.BlockedReason = "Слишком много гипо за период анализа."
-		rec.Rationale = append(rec.Rationale, "Алгоритм блокирует все ужесточающие изменения.")
+		rec.BlockedReason = "Много гипо за период: ужесточающие изменения заблокированы."
+		rec.Rationale = append(rec.Rationale, "Разрешены только более мягкие корректировки до стабилизации.")
 		return rec
 	}
 
-	if blockHypos > 0 && p.isAggressive(rec) {
+	if blockHypos >= 3 && p.isAggressive(rec) {
 		rec.Blocked = true
 		rec.BlockedReason = "Обнаружены гипо в блоке; ужесточение запрещено."
 		rec.Rationale = append(rec.Rationale, "Допустимы только более мягкие изменения после ручного ревью.")
