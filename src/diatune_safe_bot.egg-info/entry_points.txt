@@ -1,0 +1,2 @@
+[console_scripts]
+diatune-safe = diatune_safe.main:main
