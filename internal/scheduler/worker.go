@@ -181,10 +181,14 @@ func (w *Worker) configureWeeklyStats(defaultPatientIDs []string) error {
 }
 
 func (w *Worker) sendMessage(bot *tgbotapi.BotAPI, text string) {
+	chunks := telegram.SplitForTelegram(text, 3500)
 	for _, userID := range w.settings.TelegramAllowedUserIDs {
-		msg := tgbotapi.NewMessage(userID, text)
-		if _, err := bot.Send(msg); err != nil {
-			log.Printf("failed to send message to user_id=%d err=%v", userID, err)
+		for _, chunk := range chunks {
+			msg := tgbotapi.NewMessage(userID, chunk)
+			if _, err := bot.Send(msg); err != nil {
+				log.Printf("failed to send message to user_id=%d err=%v", userID, err)
+				break
+			}
 		}
 	}
 }
