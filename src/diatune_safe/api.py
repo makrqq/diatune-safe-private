@@ -34,10 +34,10 @@ class RecommendationListResponse(BaseModel):
 def create_app(settings: AppSettings, service: AnalysisService | None = None) -> FastAPI:
     app = FastAPI(
         title="Diatune Safe API",
-        version="0.1.0",
+        version="0.0.4",
         description=(
-            "Safety-first recommendation platform for Type 1 diabetes profile tuning. "
-            "The system does NOT apply settings automatically."
+            "Платформа рекомендаций для настройки профиля терапии при СД1. "
+            "Сервис не применяет изменения автоматически."
         ),
     )
     app.state.settings = settings
@@ -51,7 +51,7 @@ def create_app(settings: AppSettings, service: AnalysisService | None = None) ->
         if not configured:
             return
         if x_api_key != configured:
-            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Неверный API-ключ")
 
     @app.get("/healthz", response_model=HealthResponse, dependencies=[Depends(verify_api_key)])
     async def healthz() -> HealthResponse:
@@ -85,7 +85,7 @@ def create_app(settings: AppSettings, service: AnalysisService | None = None) ->
     async def latest_report(patient_id: str, service: AnalysisService = Depends(get_service)) -> AnalysisReport:
         report = service.get_latest_report(patient_id)
         if not report:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No report found.")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Отчет не найден")
         return report
 
     @app.get(
@@ -118,7 +118,7 @@ def create_app(settings: AppSettings, service: AnalysisService | None = None) ->
     ) -> AcknowledgeResponse:
         ok = service.acknowledge_recommendation(recommendation_id, payload.reviewer)
         if not ok:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Recommendation not found.")
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Рекомендация не найдена")
         return AcknowledgeResponse(acknowledged=True)
 
     return app
