@@ -47,7 +47,7 @@ func (s NightscoutSource) FetchDataset(ctx context.Context, patientID string, si
 		}
 	}
 	if strings.TrimSpace(s.BaseURL) == "" {
-		return domain.PatientDataset{}, DataSourceError{Msg: "nightscout URL is empty"}
+		return domain.PatientDataset{}, DataSourceError{Msg: "пустой URL Nightscout"}
 	}
 
 	entriesURL := buildURL(s.BaseURL+"/api/v1/entries/sgv.json", since, until)
@@ -185,7 +185,7 @@ func doJSONRequest(ctx context.Context, client *http.Client, endpoint string, he
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode >= 400 {
-		return nil, DataSourceError{Msg: fmt.Sprintf("nightscout request failed: %d", resp.StatusCode)}
+		return nil, DataSourceError{Msg: fmt.Sprintf("ошибка запроса к Nightscout: %d", resp.StatusCode)}
 	}
 	var payload []map[string]any
 	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
