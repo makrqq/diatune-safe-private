@@ -37,7 +37,7 @@ class PatientProfile(BaseModel):
     @model_validator(mode="after")
     def _validate_targets(self) -> "PatientProfile":
         if self.target_low_mgdl >= self.target_high_mgdl:
-            raise ValueError("target_low_mgdl must be lower than target_high_mgdl")
+            raise ValueError("target_low_mgdl должен быть меньше target_high_mgdl")
         return self
 
 
