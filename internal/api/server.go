@@ -101,7 +101,7 @@ func (s *Server) authMiddleware(next http.Handler) http.Handler {
 			return
 		}
 		if r.Header.Get("X-API-Key") != s.settings.AppAPIKey {
-			writeJSON(w, http.StatusUnauthorized, map[string]string{"detail": "Invalid API key"})
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"detail": "Неверный API-ключ"})
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -130,7 +130,7 @@ func (s *Server) handlePutProfile(w http.ResponseWriter, r *http.Request) {
 	patientID := chi.URLParam(r, "patient_id")
 	var payload domain.PatientProfile
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"detail": "invalid JSON"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"detail": "Некорректный JSON"})
 		return
 	}
 	profile, err := s.service.SaveProfile(patientID, payload)
@@ -145,7 +145,7 @@ func (s *Server) handleAnalyze(w http.ResponseWriter, r *http.Request) {
 	patientID := chi.URLParam(r, "patient_id")
 	days := parseIntDefault(r.URL.Query().Get("days"), 14)
 	if days < 1 || days > 90 {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"detail": "days must be in 1..90"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"detail": "Параметр days должен быть в диапазоне 1..90"})
 		return
 	}
 	preferRealData := parseBoolDefault(r.URL.Query().Get("prefer_real_data"), true)
@@ -165,7 +165,7 @@ func (s *Server) handleLatestReport(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if report == nil {
-		writeJSON(w, http.StatusNotFound, map[string]string{"detail": "No report found."})
+		writeJSON(w, http.StatusNotFound, map[string]string{"detail": "Отчет не найден"})
 		return
 	}
 	writeJSON(w, http.StatusOK, report)
@@ -175,7 +175,7 @@ func (s *Server) handleBacktest(w http.ResponseWriter, r *http.Request) {
 	patientID := chi.URLParam(r, "patient_id")
 	days := parseIntDefault(r.URL.Query().Get("days"), 42)
 	if days < 7 || days > 180 {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"detail": "days must be in 7..180"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"detail": "Параметр days должен быть в диапазоне 7..180"})
 		return
 	}
 	preferRealData := parseBoolDefault(r.URL.Query().Get("prefer_real_data"), true)
@@ -191,7 +191,7 @@ func (s *Server) handleWeeklyStats(w http.ResponseWriter, r *http.Request) {
 	patientID := chi.URLParam(r, "patient_id")
 	days := parseIntDefault(r.URL.Query().Get("days"), s.settings.WeeklyStatsLookbackDays)
 	if days < 3 || days > 30 {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"detail": "days must be in 3..30"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"detail": "Параметр days должен быть в диапазоне 3..30"})
 		return
 	}
 	preferRealData := parseBoolDefault(r.URL.Query().Get("prefer_real_data"), true)
@@ -207,7 +207,7 @@ func (s *Server) handleListReports(w http.ResponseWriter, r *http.Request) {
 	patientID := chi.URLParam(r, "patient_id")
 	limit := parseIntDefault(r.URL.Query().Get("limit"), 20)
 	if limit < 1 || limit > 100 {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"detail": "limit must be in 1..100"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"detail": "Параметр limit должен быть в диапазоне 1..100"})
 		return
 	}
 	reports, err := s.service.ListReports(patientID, limit)
@@ -231,16 +231,16 @@ func (s *Server) handlePendingRecommendations(w http.ResponseWriter, r *http.Req
 func (s *Server) handleAcknowledge(w http.ResponseWriter, r *http.Request) {
 	recID, err := strconv.ParseInt(chi.URLParam(r, "recommendation_id"), 10, 64)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"detail": "invalid recommendation id"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"detail": "Некорректный ID рекомендации"})
 		return
 	}
 	var payload acknowledgeRequest
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"detail": "invalid JSON"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"detail": "Некорректный JSON"})
 		return
 	}
 	if payload.Reviewer == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"detail": "reviewer is required"})
+		writeJSON(w, http.StatusBadRequest, map[string]string{"detail": "Поле reviewer обязательно"})
 		return
 	}
 	ok, err := s.service.AcknowledgeRecommendation(recID, payload.Reviewer)
@@ -249,7 +249,7 @@ func (s *Server) handleAcknowledge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !ok {
-		writeJSON(w, http.StatusNotFound, map[string]string{"detail": "Recommendation not found."})
+		writeJSON(w, http.StatusNotFound, map[string]string{"detail": "Рекомендация не найдена"})
 		return
 	}
 	writeJSON(w, http.StatusOK, acknowledgeResponse{Acknowledged: true})
