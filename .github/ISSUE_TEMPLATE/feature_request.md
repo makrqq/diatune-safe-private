@@ -1,23 +1,23 @@
 ---
-name: Feature request
-about: Suggest an enhancement
+name: Запрос функции
+about: Предложить улучшение
 title: "[FEATURE] "
 labels: enhancement
 assignees: ""
 ---
 
-## Problem
+## Проблема
 
-What problem are you trying to solve?
+Какую задачу нужно решить?
 
-## Proposal
+## Предложение
 
-Describe the expected behavior and user flow.
+Опишите ожидаемое поведение и сценарий использования.
 
-## Safety impact
+## Влияние на безопасность
 
-Could this change increase risk of unsafe recommendations?
+Может ли изменение повысить риск небезопасных рекомендаций?
 
-## Alternatives
+## Альтернативы
 
-What alternatives did you consider?
+Какие варианты вы рассматривали?
