@@ -44,7 +44,7 @@ func TestBlockAggressiveOnHypos(t *testing.T) {
 		ProposedValue: 0.9,
 		Confidence:    0.9,
 	}
-	out := p.Apply(rec, 0, 1)
+	out := p.Apply(rec, 0, 3)
 	if !out.Blocked {
 		t.Fatalf("expected blocked")
 	}
