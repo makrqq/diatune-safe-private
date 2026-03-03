@@ -1,0 +1,208 @@
+Metadata-Version: 2.4
+Name: diatune-safe-bot
+Version: 0.1.0
+Summary: Open-source safe recommendation platform for type 1 diabetes profile tuning.
+Requires-Python: >=3.11
+Description-Content-Type: text/markdown
+Requires-Dist: apscheduler>=3.10.4
+Requires-Dist: fastapi>=0.116.0
+Requires-Dist: httpx>=0.28.0
+Requires-Dist: pydantic>=2.11.0
+Requires-Dist: pydantic-settings>=2.10.0
+Requires-Dist: python-dotenv>=1.1.0
+Requires-Dist: python-telegram-bot>=22.0
+Requires-Dist: uvicorn>=0.35.0
+Provides-Extra: dev
+Requires-Dist: pytest-asyncio>=1.2.0; extra == "dev"
+Requires-Dist: pytest>=8.4.0; extra == "dev"
+
+# Diatune Safe
+
+Open-source платформа для безопасной настройки профиля терапии при диабете 1 типа в режиме `suggest-only`.
+
+Ключевой принцип: сервис **никогда не меняет настройки автоматически**.  
+Он только формирует рекомендации и отправляет их в API/Telegram для ручного подтверждения.
+
+## Важно
+
+- Это не медицинское изделие и не замена врачу.
+- Любые изменения коэффициентов должны подтверждаться человеком.
+- Проект специально блокирует агрессивные рекомендации при риске гипогликемий.
+
+## Что реализовано
+
+- Многоблочный профиль (`ICR`, `ISF`, `basal`) по временным блокам.
+- Источники данных:
+  - Nightscout (`entries + treatments`).
+  - синтетический генератор (fallback / тестирование).
+- Продвинутый движок анализа:
+  - постпрандиальные дельты (2 часа),
+  - эффективность корректировок,
+  - дрейф в голодном окне,
+  - робастная статистика (winsorization + MAD),
+  - оценка вариативности и согласованности сигналов.
+- Safety policy:
+  - лимит суточного шага (`MAX_DAILY_CHANGE_PCT`),
+  - блокировка при гипо,
+  - блокировка при низкой уверенности,
+  - физиологические пределы параметров.
+- Полный audit trail в SQLite:
+  - профили,
+  - анализы,
+  - рекомендации,
+  - ручные подтверждения.
+- REST API (FastAPI) + Telegram-бот.
+- Фоновый worker-планировщик периодического анализа.
+
+## Архитектура
+
+`src/diatune_safe/config.py`  
+Конфигурация через env + валидация.
+
+`src/diatune_safe/data_sources.py`  
+Адаптеры источников данных (Nightscout / Synthetic).
+
+`src/diatune_safe/engine.py`  
+Ядро алгоритмов рекомендаций.
+
+`src/diatune_safe/safety.py`  
+Политика безопасности и guardrails.
+
+`src/diatune_safe/repository.py`  
+SQLite-хранилище и аудит.
+
+`src/diatune_safe/service.py`  
+Оркестрация анализа и бизнес-логика.
+
+`src/diatune_safe/api.py`  
+HTTP API.
+
+`src/diatune_safe/telegram_bot.py`  
+Telegram-интерфейс для оператора.
+
+`src/diatune_safe/scheduler.py`  
+Фоновый периодический запуск анализов.
+
+`src/diatune_safe/main.py`  
+Единый CLI (`api`, `bot`, `worker`, `analyze`, `bootstrap`).
+
+## Быстрый старт
+
+1. Установить зависимости:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e ".[dev]"
+```
+
+2. Подготовить env:
+
+```bash
+cp .env.example .env
+```
+
+3. Создать профиль пациента:
+
+```bash
+diatune-safe bootstrap --patient-id demo
+```
+
+4. Разовый анализ:
+
+```bash
+diatune-safe analyze --patient-id demo --days 14 --synthetic
+```
+
+5. Запустить API:
+
+```bash
+diatune-safe api --host 0.0.0.0 --port 8080
+```
+
+## Nightscout
+
+Заполните в `.env`:
+
+- `NIGHTSCOUT_URL=https://your-nightscout.example`
+- `NIGHTSCOUT_API_SECRET=...`
+
+Если Nightscout недоступен или вернул пустой набор, сервис автоматически перейдет на synthetic fallback.
+
+## Telegram
+
+Заполните:
+
+- `TELEGRAM_BOT_TOKEN`
+- `TELEGRAM_ALLOWED_USER_IDS` (через запятую, опционально)
+
+Запуск:
+
+```bash
+diatune-safe bot
+```
+
+Команды:
+
+- `/analyze [patient_id] [days]`
+- `/latest [patient_id]`
+- `/pending [patient_id]`
+- `/ack <recommendation_id> [reviewer]`
+
+## Worker (автоматический периодический анализ)
+
+В `.env`:
+
+- `AUTO_ANALYSIS_ENABLED=true` (для операционного использования)
+- `AUTO_ANALYSIS_INTERVAL_MINUTES=360`
+- `AUTO_ANALYSIS_PATIENT_IDS=patient-a,patient-b`
+
+Запуск:
+
+```bash
+diatune-safe worker
+```
+
+или:
+
+```bash
+diatune-safe worker --patients patient-a,patient-b
+```
+
+## API
+
+Если задан `APP_API_KEY`, передавайте заголовок:
+
+`X-API-Key: <APP_API_KEY>`
+
+Основные endpoint-ы:
+
+- `GET /healthz`
+- `GET /v1/patients/{patient_id}/profile`
+- `PUT /v1/patients/{patient_id}/profile`
+- `POST /v1/patients/{patient_id}/analyze?days=14&prefer_real_data=true`
+- `GET /v1/patients/{patient_id}/reports/latest`
+- `GET /v1/patients/{patient_id}/reports?limit=20`
+- `GET /v1/patients/{patient_id}/recommendations/pending`
+- `POST /v1/recommendations/{recommendation_id}/acknowledge`
+
+## Безопасность и ограничения
+
+- Нет автоприменения параметров ни в каком режиме.
+- Любая рекомендация имеет статус `OPEN/BLOCKED`.
+- `BLOCKED` формируется при:
+  - недостатке данных,
+  - частых гипо,
+  - низкой уверенности,
+  - минимальном эффекте изменения.
+- Подтверждение (`ack`) сохраняется в аудите.
+
+## Тесты
+
+```bash
+pytest -q
+```
+
+## Лицензирование
+
+Рекомендуется использовать `AGPL-3.0` или `Apache-2.0` в зависимости от политики публикации.
