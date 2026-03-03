@@ -21,7 +21,7 @@ class AnalysisScheduler:
     async def run_forever(self, patient_ids: list[str] | None = None) -> None:
         ids = patient_ids or self.settings.auto_analysis_patient_ids
         if not ids:
-            raise RuntimeError("No patient ids provided for scheduler.")
+            raise RuntimeError("Не переданы ID пациентов для планировщика.")
 
         for patient_id in ids:
             self.scheduler.add_job(
@@ -33,7 +33,7 @@ class AnalysisScheduler:
                 id=f"analyze-{patient_id}",
                 replace_existing=True,
             )
-            logger.info("Scheduled background analysis for patient_id=%s", patient_id)
+            logger.info("Запланирован фоновый анализ для patient_id=%s", patient_id)
 
         self.scheduler.start()
         try:
@@ -50,10 +50,10 @@ class AnalysisScheduler:
                 prefer_real_data=True,
             )
             logger.info(
-                "Scheduled analysis complete patient_id=%s run_id=%s warnings=%s",
+                "Плановый анализ завершен patient_id=%s run_id=%s предупреждений=%s",
                 patient_id,
                 report.run_id,
                 len(report.warnings),
             )
         except Exception:
-            logger.exception("Scheduled analysis failed for patient_id=%s", patient_id)
+            logger.exception("Плановый анализ завершился с ошибкой patient_id=%s", patient_id)
