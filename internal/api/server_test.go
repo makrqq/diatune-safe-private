@@ -43,6 +43,13 @@ func TestAPIFlow(t *testing.T) {
 	if resp.Code != http.StatusOK {
 		t.Fatalf("health status: %d", resp.Code)
 	}
+	var healthBody map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &healthBody); err != nil {
+		t.Fatalf("decode health: %v", err)
+	}
+	if healthBody["version"] == nil || healthBody["version"] == "" {
+		t.Fatalf("health version expected")
+	}
 
 	req = httptest.NewRequest(http.MethodPost, "/v1/patients/demo/analyze?days=2&prefer_real_data=false", nil)
 	req.Header.Set("X-API-Key", "secret")
