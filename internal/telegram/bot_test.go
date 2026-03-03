@@ -45,17 +45,17 @@ func TestFormatReportWithSettingsStructuredOutput(t *testing.T) {
 
 	got := FormatReportWithSettings(report, config.Settings{Timezone: "Europe/Moscow", GlucoseUnit: "mmol"})
 	mustContain := []string{
-		"Diatune Safe",
-		"Сводка:",
-		"Предупреждения:",
-		"Рекомендации для AAPS (TOP 5):",
-		"AAPS:",
-		"Обоснование:",
-		"Заблокировано (топ причин):",
+		"🩺 Отчет Diatune Safe",
+		"Коротко:",
+		"На что обратить внимание:",
+		"Что можно изменить сейчас:",
+		"Что сделать:",
+		"Почему:",
+		"Почему часть изменений заблокирована:",
 	}
 	for _, part := range mustContain {
 		if !strings.Contains(got, part) {
-			t.Fatalf("expected %q in output:\n%s", part, got)
+			t.Fatalf("ожидали фрагмент %q в тексте:\n%s", part, got)
 		}
 	}
 }
@@ -64,14 +64,14 @@ func TestSplitForTelegram(t *testing.T) {
 	text := strings.Repeat("line text\n", 200)
 	chunks := SplitForTelegram(text, 600)
 	if len(chunks) < 2 {
-		t.Fatalf("expected multiple chunks")
+		t.Fatalf("ожидали разбиение на несколько частей")
 	}
 	for i, chunk := range chunks {
 		if len(strings.TrimSpace(chunk)) == 0 {
-			t.Fatalf("chunk %d is empty", i)
+			t.Fatalf("часть %d пустая", i)
 		}
 		if runeCount := len([]rune(chunk)); runeCount > 600 {
-			t.Fatalf("chunk %d too long: %d", i, runeCount)
+			t.Fatalf("часть %d слишком длинная: %d", i, runeCount)
 		}
 	}
 }
