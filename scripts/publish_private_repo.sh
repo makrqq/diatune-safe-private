@@ -2,8 +2,8 @@
 set -euo pipefail
 
 if [[ $# -lt 1 ]]; then
-  echo "Usage: $0 <owner/repo> [commit_message]"
-  echo "Example: GH_TOKEN=... $0 myuser/diatune-safe-private 'Initial private import with binary'"
+  echo "Использование: $0 <owner/repo> [commit_message]"
+  echo "Пример: GH_TOKEN=... $0 myuser/diatune-safe-private 'Первичная загрузка приватного репозитория с бинарником'"
   exit 1
 fi
 
@@ -11,12 +11,12 @@ REPO="$1"
 COMMIT_MESSAGE="${2:-Initial private import with binary}"
 
 if [[ -z "${GH_TOKEN:-}" ]]; then
-  echo "GH_TOKEN is required in environment."
+  echo "Нужно передать GH_TOKEN в переменных окружения."
   exit 1
 fi
 
 if [[ ! -x "./tools/gh" ]]; then
-  echo "Missing ./tools/gh."
+  echo "Не найден исполняемый файл ./tools/gh."
   exit 1
 fi
 
@@ -29,12 +29,12 @@ if ! "$GH" api "repos/${REPO}" >/dev/null 2>&1; then
   OWNER="${REPO%%/*}"
   NAME="${REPO##*/}"
   "$GH" api -X POST "user/repos" -f name="$NAME" -F private=true >/dev/null || {
-    echo "Failed to create repo via user/repos. If org repo, create manually and rerun."
+    echo "Не удалось создать репозиторий через user/repos. Для репозитория организации создайте его вручную и повторите запуск."
     exit 1
   }
-  echo "Created private repo: ${REPO}"
+  echo "Создан приватный репозиторий: ${REPO}"
 else
-  echo "Repo already exists: ${REPO}"
+  echo "Репозиторий уже существует: ${REPO}"
 fi
 
 # Upload all files except local caches/secrets/runtime dirs
@@ -83,8 +83,8 @@ for file in "${FILES[@]}"; do
   } > "$payload"
 
   if ! "$GH" api -X PUT "repos/${REPO}/contents/${rel}" --input "$payload" >/dev/null; then
-    echo "Failed to upload: ${rel}"
-    echo "Payload size: $(wc -c < "$payload") bytes"
+    echo "Ошибка загрузки файла: ${rel}"
+    echo "Размер payload: $(wc -c < "$payload") байт"
     rm -f "$payload"
     exit 1
   fi
@@ -92,8 +92,8 @@ for file in "${FILES[@]}"; do
 
   COUNT=$((COUNT+1))
   if (( COUNT % 20 == 0 )); then
-    echo "Uploaded ${COUNT}/${TOTAL} files..."
+    echo "Загружено ${COUNT}/${TOTAL} файлов..."
   fi
 done
 
-echo "Done. Uploaded ${COUNT} files to https://github.com/${REPO}"
+echo "Готово. Загружено ${COUNT} файлов в https://github.com/${REPO}"
