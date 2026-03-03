@@ -23,7 +23,7 @@ class TelegramBotRunner:
 
     def run(self) -> None:
         if not self.settings.telegram_bot_token:
-            raise RuntimeError("TELEGRAM_BOT_TOKEN is empty.")
+            raise RuntimeError("TELEGRAM_BOT_TOKEN не задан.")
 
         app = Application.builder().token(self.settings.telegram_bot_token).build()
         app.add_handler(CommandHandler("start", self._start))
@@ -39,13 +39,13 @@ class TelegramBotRunner:
             await update.effective_message.reply_text("Доступ запрещен.")
             return
         await update.effective_message.reply_text(
-            "Diatune Safe Bot\n"
+            "👋 Diatune Safe Bot\n"
+            "Я формирую только предложения и ничего не применяю автоматически.\n\n"
             "Команды:\n"
-            "/analyze [patient_id] [days]\n"
-            "/latest [patient_id]\n"
-            "/pending [patient_id]\n"
-            "/ack <recommendation_id> [reviewer]\n"
-            "\nСервис только предлагает изменения и никогда не применяет их автоматически."
+            "/analyze [patient_id] [days] - запустить анализ\n"
+            "/latest [patient_id] - последний отчет\n"
+            "/pending [patient_id] - список рекомендаций\n"
+            "/ack <recommendation_id> [reviewer] - отметить рекомендацию как проверенную"
         )
 
     async def _help(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -59,13 +59,13 @@ class TelegramBotRunner:
         try:
             days = int(context.args[1]) if len(context.args) > 1 else self.settings.analysis_lookback_days
         except ValueError:
-            await update.effective_message.reply_text("Неверный формат days. Пример: /analyze demo 14")
+            await update.effective_message.reply_text("Неверный формат количества дней. Пример: /analyze demo 14")
             return
         try:
             report = await self.service.run_analysis(patient_id=patient_id, days=days, prefer_real_data=True)
             await update.effective_message.reply_text(self._format_report(report))
         except Exception as exc:
-            await update.effective_message.reply_text(f"Ошибка анализа: {exc}")
+            await update.effective_message.reply_text(f"Не удалось выполнить анализ: {exc}")
 
     async def _latest(self, update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not _is_allowed(self.settings, update.effective_user.id if update.effective_user else None):
@@ -74,7 +74,7 @@ class TelegramBotRunner:
         patient_id = context.args[0] if context.args else f"tg-{update.effective_user.id}"
         report = self.service.get_latest_report(patient_id)
         if not report:
-            await update.effective_message.reply_text("Отчеты не найдены. Выполните /analyze.")
+            await update.effective_message.reply_text("Отчетов пока нет. Сначала выполните /analyze.")
             return
         await update.effective_message.reply_text(self._format_report(report))
 
@@ -85,9 +85,9 @@ class TelegramBotRunner:
         patient_id = context.args[0] if context.args else f"tg-{update.effective_user.id}"
         pending = self.service.list_pending_recommendations(patient_id)
         if not pending:
-            await update.effective_message.reply_text("Нет ожидающих подтверждения рекомендаций.")
+            await update.effective_message.reply_text("Нет рекомендаций, ожидающих ручной проверки.")
             return
-        lines = ["Pending recommendations:"]
+        lines = ["📋 Рекомендации к ручной проверке:"]
         for rec in pending[:20]:
             lines.append(_format_recommendation(rec))
         await update.effective_message.reply_text("\n".join(lines))
@@ -97,32 +97,32 @@ class TelegramBotRunner:
             await update.effective_message.reply_text("Доступ запрещен.")
             return
         if not context.args:
-            await update.effective_message.reply_text("Использование: /ack <recommendation_id> [reviewer]")
+            await update.effective_message.reply_text("Формат: /ack <recommendation_id> [reviewer]")
             return
         try:
             recommendation_id = int(context.args[0])
         except ValueError:
-            await update.effective_message.reply_text("recommendation_id должен быть числом.")
+            await update.effective_message.reply_text("ID рекомендации должен быть числом.")
             return
         reviewer = context.args[1] if len(context.args) > 1 else f"tg:{update.effective_user.id}"
         ok = self.service.acknowledge_recommendation(recommendation_id, reviewer)
         if ok:
-            await update.effective_message.reply_text(f"Рекомендация {recommendation_id} подтверждена ({reviewer}).")
+            await update.effective_message.reply_text(f"✅ Рекомендация {recommendation_id} отмечена как проверенная ({reviewer}).")
         else:
-            await update.effective_message.reply_text("Рекомендация не найдена или уже подтверждена.")
+            await update.effective_message.reply_text("Рекомендация не найдена или уже была отмечена ранее.")
 
     def _format_report(self, report: AnalysisReport) -> str:
         generated = report.generated_at.astimezone().strftime("%Y-%m-%d %H:%M")
         lines = [
-            f"Report #{report.run_id} [{report.patient_id}]",
-            f"Generated: {generated}",
-            f"Period: {report.period_start.date()}..{report.period_end.date()}",
-            f"Global hypos: {report.global_hypo_events}",
+            f"🩺 Отчет #{report.run_id} по пациенту {report.patient_id}",
+            f"Сформирован: {generated}",
+            f"Период: {report.period_start.date()}..{report.period_end.date()}",
+            f"События гипо за период: {report.global_hypo_events}",
         ]
         if report.warnings:
-            lines.append("Warnings:")
+            lines.append("На что обратить внимание:")
             lines.extend(f"- {item}" for item in report.warnings)
-        lines.append("Recommendations:")
+        lines.append("Рекомендации:")
         for rec in report.recommendations:
             lines.append(_format_recommendation(rec))
         lines.append("Важно: это только предложения, ручное решение обязательно.")
@@ -130,11 +130,11 @@ class TelegramBotRunner:
 
 
 def _format_recommendation(rec: Recommendation) -> str:
-    status = "BLOCKED" if rec.blocked else "OPEN"
+    status = "ЗАБЛОКИРОВАНО" if rec.blocked else "К ВЫПОЛНЕНИЮ"
     sign = "+" if rec.percent_change > 0 else ""
     line = (
         f"#{rec.id or '-'} {status} {rec.block_name} {rec.parameter.upper()}: "
-        f"{rec.current_value:.2f} -> {rec.proposed_value:.2f} ({sign}{rec.percent_change:.1f}%, conf={rec.confidence:.2f})"
+        f"{rec.current_value:.2f} -> {rec.proposed_value:.2f} ({sign}{rec.percent_change:.1f}%, уверенность={rec.confidence:.2f})"
     )
     if rec.blocked_reason:
         line = f"{line} | {rec.blocked_reason}"
