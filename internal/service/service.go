@@ -89,7 +89,7 @@ func (s *Service) RunAnalysis(ctx context.Context, patientID string, days int, p
 	if err != nil {
 		return domain.AnalysisReport{}, err
 	}
-	log.Printf("analysis completed patient_id=%s run_id=%v", patientID, saved.RunID)
+	log.Printf("анализ завершен patient_id=%s run_id=%v", patientID, saved.RunID)
 	return saved, nil
 }
 
@@ -133,9 +133,9 @@ func (s *Service) loadDatasetWithSource(ctx context.Context, patientID string, p
 			return dataset, "nightscout", nil
 		}
 		if err != nil {
-			log.Printf("nightscout fetch failed (%v), using synthetic fallback", err)
+			log.Printf("ошибка загрузки из Nightscout (%v), используем синтетические данные", err)
 		} else {
-			log.Printf("nightscout returned empty glucose dataset, using synthetic fallback")
+			log.Printf("Nightscout вернул пустой набор глюкозы, используем синтетические данные")
 		}
 	}
 	dataset, err := s.synthetic.FetchDataset(ctx, patientID, periodStart, periodEnd)
