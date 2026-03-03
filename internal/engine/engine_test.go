@@ -18,6 +18,9 @@ func testSettings() config.Settings {
 		GlobalHypoGuardLimit:   20,
 		HypoThresholdMgdl:      70,
 		HyperThresholdMgdl:     180,
+		MonteCarloSamples:      400,
+		MinBenefitProbability:  0.58,
+		MaxHypoRiskProbability: 0.22,
 	}
 }
 
@@ -57,5 +60,71 @@ func TestAnalyzeProducesRecommendations(t *testing.T) {
 
 	if len(report.Recommendations) != 3 {
 		t.Fatalf("expected 3 recommendations, got %d", len(report.Recommendations))
+	}
+}
+
+func TestRecommendICRWithStrongSignal(t *testing.T) {
+	eng := New(testSettings())
+	block := domain.BlockSettings{
+		Block: domain.TimeBlock{Name: "08-11", StartHour: 8, EndHour: 11},
+		ICR:   10,
+		ISF:   45,
+		Basal: 0.8,
+	}
+	delta := 60.0
+	variability := 14.0
+	mealCarbs := 48.0
+	ratio := 0.82
+	st := domain.BlockStats{
+		BlockName:               "08-11",
+		Meals:                   8,
+		Corrections:             6,
+		HypoEvents:              0,
+		MeanPostprandialDelta:   &delta,
+		PostprandialVariability: &variability,
+		AvgMealCarbs:            &mealCarbs,
+		MeanCorrectionRatio:     &ratio,
+	}
+
+	rec := eng.recommendICR(block, st, 0)
+	if rec.Blocked {
+		t.Fatalf("expected non-blocked recommendation, reason=%s", rec.BlockedReason)
+	}
+	if rec.ProposedValue >= block.ICR {
+		t.Fatalf("expected ICR to decrease, got %.3f", rec.ProposedValue)
+	}
+	if rec.Confidence <= 0.5 {
+		t.Fatalf("expected confidence > 0.5, got %.3f", rec.Confidence)
+	}
+}
+
+func TestRecommendICRHighBenefitThresholdLowersConfidence(t *testing.T) {
+	s := testSettings()
+	s.MinBenefitProbability = 0.98
+	eng := New(s)
+	block := domain.BlockSettings{
+		Block: domain.TimeBlock{Name: "08-11", StartHour: 8, EndHour: 11},
+		ICR:   10,
+		ISF:   45,
+		Basal: 0.8,
+	}
+	delta := 24.0
+	variability := 45.0
+	mealCarbs := 40.0
+	ratio := 0.95
+	st := domain.BlockStats{
+		BlockName:               "08-11",
+		Meals:                   3,
+		Corrections:             2,
+		HypoEvents:              0,
+		MeanPostprandialDelta:   &delta,
+		PostprandialVariability: &variability,
+		AvgMealCarbs:            &mealCarbs,
+		MeanCorrectionRatio:     &ratio,
+	}
+
+	rec := eng.recommendICR(block, st, 0)
+	if rec.Confidence >= 0.7 {
+		t.Fatalf("expected confidence penalty due strict probability thresholds, got %.3f", rec.Confidence)
 	}
 }
