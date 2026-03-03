@@ -17,6 +17,8 @@ type Settings struct {
 	DatabasePath string
 	Timezone     string
 	LogLevel     string
+	Locale       string
+	GlucoseUnit  string
 
 	TelegramBotToken       string
 	TelegramAllowedUserIDs []int64
@@ -33,10 +35,23 @@ type Settings struct {
 	HyperThresholdMgdl     int
 	GlobalHypoGuardLimit   int
 	SafetyMinConfidence    float64
+	MonteCarloSamples      int
+	MinBenefitProbability  float64
+	MaxHypoRiskProbability float64
 
 	AutoAnalysisEnabled         bool
 	AutoAnalysisIntervalMinutes int
 	AutoAnalysisPatientIDs      []string
+
+	DailyRecommendationEnabled    bool
+	DailyRecommendationTime       string
+	DailyRecommendationPatientIDs []string
+
+	WeeklyStatsEnabled      bool
+	WeeklyStatsDay          string
+	WeeklyStatsTime         string
+	WeeklyStatsLookbackDays int
+	WeeklyStatsPatientIDs   []string
 }
 
 func Load() (Settings, error) {
@@ -48,8 +63,10 @@ func Load() (Settings, error) {
 		AppPort:      envInt("APP_PORT", 8080),
 		AppAPIKey:    envString("APP_API_KEY", ""),
 		DatabasePath: envString("DATABASE_PATH", "/workspace/data/diatune_safe.sqlite3"),
-		Timezone:     envString("TIMEZONE", "UTC"),
+		Timezone:     envString("TIMEZONE", "Europe/Moscow"),
 		LogLevel:     strings.ToUpper(envString("LOG_LEVEL", "INFO")),
+		Locale:       envString("LOCALE", "ru-RU"),
+		GlucoseUnit:  strings.ToLower(envString("GLUCOSE_UNIT", "mmol")),
 
 		TelegramBotToken:       envString("TELEGRAM_BOT_TOKEN", ""),
 		TelegramAllowedUserIDs: envInt64List("TELEGRAM_ALLOWED_USER_IDS"),
@@ -58,18 +75,31 @@ func Load() (Settings, error) {
 		NightscoutAPISecret: envString("NIGHTSCOUT_API_SECRET", ""),
 
 		AnalysisLookbackDays:   envInt("ANALYSIS_LOOKBACK_DAYS", 14),
-		MaxDailyChangePct:      envFloat("MAX_DAILY_CHANGE_PCT", 4.0),
-		MinMealsPerBlock:       envInt("MIN_MEALS_PER_BLOCK", 3),
-		MinCorrectionsPerBlock: envInt("MIN_CORRECTIONS_PER_BLOCK", 3),
-		MinFastingHours:        envInt("MIN_FASTING_HOURS", 6),
+		MaxDailyChangePct:      envFloat("MAX_DAILY_CHANGE_PCT", 8.0),
+		MinMealsPerBlock:       envInt("MIN_MEALS_PER_BLOCK", 1),
+		MinCorrectionsPerBlock: envInt("MIN_CORRECTIONS_PER_BLOCK", 1),
+		MinFastingHours:        envInt("MIN_FASTING_HOURS", 2),
 		HypoThresholdMgdl:      envInt("HYPO_THRESHOLD_MGDL", 70),
 		HyperThresholdMgdl:     envInt("HYPER_THRESHOLD_MGDL", 180),
-		GlobalHypoGuardLimit:   envInt("GLOBAL_HYPO_GUARD_LIMIT", 2),
-		SafetyMinConfidence:    envFloat("SAFETY_MIN_CONFIDENCE", 0.55),
+		GlobalHypoGuardLimit:   envInt("GLOBAL_HYPO_GUARD_LIMIT", 30),
+		SafetyMinConfidence:    envFloat("SAFETY_MIN_CONFIDENCE", 0.08),
+		MonteCarloSamples:      envInt("MONTE_CARLO_SAMPLES", 1200),
+		MinBenefitProbability:  envFloat("MIN_BENEFIT_PROBABILITY", 0.35),
+		MaxHypoRiskProbability: envFloat("MAX_HYPO_RISK_PROBABILITY", 0.60),
 
 		AutoAnalysisEnabled:         envBool("AUTO_ANALYSIS_ENABLED", false),
 		AutoAnalysisIntervalMinutes: envInt("AUTO_ANALYSIS_INTERVAL_MINUTES", 360),
 		AutoAnalysisPatientIDs:      envStringList("AUTO_ANALYSIS_PATIENT_IDS"),
+
+		DailyRecommendationEnabled:    envBool("DAILY_RECOMMENDATION_ENABLED", false),
+		DailyRecommendationTime:       envString("DAILY_RECOMMENDATION_TIME", "22:00"),
+		DailyRecommendationPatientIDs: envStringList("DAILY_RECOMMENDATION_PATIENT_IDS"),
+
+		WeeklyStatsEnabled:      envBool("WEEKLY_STATS_ENABLED", false),
+		WeeklyStatsDay:          strings.ToLower(envString("WEEKLY_STATS_DAY", "mon")),
+		WeeklyStatsTime:         envString("WEEKLY_STATS_TIME", "21:00"),
+		WeeklyStatsLookbackDays: envInt("WEEKLY_STATS_LOOKBACK_DAYS", 7),
+		WeeklyStatsPatientIDs:   envStringList("WEEKLY_STATS_PATIENT_IDS"),
 	}
 
 	if s.AppPort <= 0 {
@@ -77,6 +107,27 @@ func Load() (Settings, error) {
 	}
 	if s.AnalysisLookbackDays <= 0 {
 		return Settings{}, fmt.Errorf("ANALYSIS_LOOKBACK_DAYS must be positive")
+	}
+	if s.MonteCarloSamples < 200 {
+		s.MonteCarloSamples = 200
+	}
+	if s.MonteCarloSamples > 5000 {
+		s.MonteCarloSamples = 5000
+	}
+	if s.MinBenefitProbability < 0 || s.MinBenefitProbability > 1 {
+		return Settings{}, fmt.Errorf("MIN_BENEFIT_PROBABILITY must be in [0,1]")
+	}
+	if s.MaxHypoRiskProbability < 0 || s.MaxHypoRiskProbability > 1 {
+		return Settings{}, fmt.Errorf("MAX_HYPO_RISK_PROBABILITY must be in [0,1]")
+	}
+	if s.GlucoseUnit != "mmol" && s.GlucoseUnit != "mgdl" {
+		s.GlucoseUnit = "mmol"
+	}
+	if s.WeeklyStatsLookbackDays < 3 {
+		s.WeeklyStatsLookbackDays = 3
+	}
+	if s.WeeklyStatsLookbackDays > 30 {
+		s.WeeklyStatsLookbackDays = 30
 	}
 	return s, nil
 }
