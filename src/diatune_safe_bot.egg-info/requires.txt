@@ -1,0 +1,12 @@
+apscheduler>=3.10.4
+fastapi>=0.116.0
+httpx>=0.28.0
+pydantic>=2.11.0
+pydantic-settings>=2.10.0
+python-dotenv>=1.1.0
+python-telegram-bot>=22.0
+uvicorn>=0.35.0
+
+[dev]
+pytest-asyncio>=1.2.0
+pytest>=8.4.0
