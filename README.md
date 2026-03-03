@@ -1,56 +1,55 @@
 # Diatune Safe (Go)
 
-Open-source платформа для безопасной настройки профиля терапии при диабете 1 типа в режиме `suggest-only`.
+Открытая платформа для безопасной настройки профиля терапии при диабете 1 типа в режиме `только-предложения`.
 
-Ключевой принцип: сервис **никогда не меняет настройки автоматически**.
-Он только формирует рекомендации и отправляет их через API/Telegram для ручного подтверждения.
+Главный принцип: сервис **никогда не меняет настройки автоматически**.
+Он только формирует предложения и отправляет их через API/Telegram для ручной проверки.
 
 ## Важно
 
 - Это не медицинское изделие и не замена врачу.
 - Любые изменения коэффициентов подтверждаются человеком.
-- Агрессивные рекомендации автоматически блокируются при риске гипогликемий.
-- Проект не является медицинским изделием.
+- При риске гипогликемий агрессивные изменения автоматически блокируются.
 
 ## Что реализовано
 
 - Многоблочный профиль (`ICR`, `ISF`, `basal`) по временным блокам.
-- Источники данных: `Nightscout` + synthetic fallback.
-- Продвинутый движок анализа:
+- Источники данных: `Nightscout` + синтетический источник.
+- Продвинутый анализ:
   - постпрандиальные дельты,
   - эффективность корректировок,
   - дрейф в голодном окне,
-  - робастная статистика (`MAD`, winsorized mean),
-  - оценка вариативности и согласованности сигналов,
-  - вероятностная модель решения (Monte Carlo): вероятность пользы, риск гипо, авто-масштабирование шага.
-- Safety policy:
+  - робастная статистика (`MAD`, `winsorized mean`),
+  - оценка вариативности,
+  - вероятностная модель решения (Monte Carlo).
+- Политика безопасности:
   - лимит суточного шага,
   - блокировки по гипо,
-  - блокировки по low-confidence,
+  - блокировки при низкой уверенности,
   - блокировки по вероятностному риску,
   - физиологические границы параметров.
-- Полный audit trail в SQLite:
+- Полный аудит в SQLite:
   - профили,
-  - анализы,
+  - отчеты,
   - рекомендации,
   - ручные подтверждения.
-- REST API, Telegram-бот, scheduler worker.
-- Backtest-валидация и weekly quality monitoring.
-- Локализация под РФ: форматы дат, mmol/L в отчетах, timezone `Europe/Moscow`.
+- HTTP API, Telegram-бот, планировщик.
+- Проверка на истории и недельная статистика.
+- Локализация под РФ: русский язык, `Europe/Moscow`, отображение mmol/L.
 - Рекомендации сразу в терминах профиля AAPS (`IC`, `ISF`, `Basal`) по временным блокам.
 
 ## Архитектура
 
-- `cmd/diatune-safe/main.go` — единый CLI (`api`, `bot`, `worker`, `analyze`, `bootstrap`, `backtest`, `weekstats`)
-- `internal/config` — env-конфигурация
-- `internal/datasource` — Nightscout/synthetic источники
-- `internal/engine` — алгоритмы рекомендаций
-- `internal/safety` — guardrails
-- `internal/repository` — SQLite persistence/audit
-- `internal/service` — orchestration
-- `internal/api` — HTTP API
-- `internal/telegram` — Telegram bot
-- `internal/scheduler` — фоновые периодические запуски
+- `cmd/diatune-safe/main.go` - единый CLI (`api`, `bot`, `worker`, `analyze`, `bootstrap`, `backtest`, `weekstats`)
+- `internal/config` - конфигурация из env
+- `internal/datasource` - источники Nightscout/синтетика
+- `internal/engine` - алгоритмы рекомендаций
+- `internal/safety` - ограничения безопасности
+- `internal/repository` - хранение и аудит в SQLite
+- `internal/service` - оркестрация
+- `internal/api` - HTTP API
+- `internal/telegram` - Telegram-бот
+- `internal/scheduler` - фоновые периодические запуски
 
 ## Быстрый старт
 
@@ -84,7 +83,7 @@ go run ./cmd/diatune-safe analyze --patient-id demo --days 14 --synthetic
 go run ./cmd/diatune-safe api --host 0.0.0.0 --port 8080
 ```
 
-## Telegram
+## Telegram-бот
 
 Заполните в `.env`:
 
@@ -99,17 +98,17 @@ go run ./cmd/diatune-safe bot
 
 Команды:
 
-- `/analyze [patient_id] [days]`
-- `/backtest [patient_id] [days]`
-- `/weekstats [patient_id] [days]`
-- `/latest [patient_id]`
-- `/pending [patient_id]`
-- `/version`
-- `/ack <recommendation_id> [reviewer]`
+- `/analyze [patient_id] [days]` - свежий анализ
+- `/latest [patient_id]` - последний отчет
+- `/pending [patient_id]` - список рекомендаций для ручной проверки
+- `/ack <recommendation_id> [reviewer]` - отметить рекомендацию как проверенную
+- `/backtest [patient_id] [days]` - проверка алгоритма на истории
+- `/weekstats [patient_id] [days]` - сравнение недели к неделе
+- `/version` - версия сервиса
 
-## Worker
+## Планировщик (worker)
 
-В `.env`:
+Настройки в `.env`:
 
 - `AUTO_ANALYSIS_ENABLED=true`
 - `AUTO_ANALYSIS_INTERVAL_MINUTES=360`
@@ -125,7 +124,7 @@ go run ./cmd/diatune-safe bot
 - `WEEKLY_STATS_TIME=21:00` (формат `HH:MM`)
 - `WEEKLY_STATS_LOOKBACK_DAYS=7`
 - `WEEKLY_STATS_PATIENT_IDS=patient-a,patient-b` (опционально)
-- `TIMEZONE=Europe/Moscow` (чтобы `DAILY_RECOMMENDATION_TIME` работал в нужной зоне)
+- `TIMEZONE=Europe/Moscow`
 
 Запуск:
 
@@ -145,7 +144,7 @@ go run ./cmd/diatune-safe worker --patients patient-a,patient-b
 
 `X-API-Key: <APP_API_KEY>`
 
-Основные endpoint-ы:
+Основные эндпоинты:
 
 - `GET /healthz`
 - `GET /v1/patients/{patient_id}/profile`
@@ -166,7 +165,7 @@ go test ./...
 
 ## Версионирование
 
-- Текущая версия хранится в файле `VERSION`.
+- Текущая версия хранится в `VERSION`.
 - CLI-команда: `diatune-safe version`.
 - Telegram-команда: `/version`.
 
@@ -177,34 +176,21 @@ docker build -t diatune-safe .
 docker run --rm -p 8080:8080 --env-file .env diatune-safe
 ```
 
-## Публикация в приватный GitHub (с бинарником)
-
-В проекте уже предусмотрен бинарник:
-
-- `release/diatune-safe-linux-amd64`
-- `release/diatune-safe-linux-amd64.sha256`
-- `release/diatune-safe-linux-amd64.gz`
-- `release/diatune-safe-linux-amd64.gz.sha256`
+## Публикация в GitHub
 
 Автопубликация (без локального `git`, через `gh api`):
 
 ```bash
-GH_TOKEN=... ./scripts/publish_private_repo.sh <owner/repo> "Initial private import with binary"
+GH_TOKEN=... ./scripts/publish_private_repo.sh <owner/repo> "Релиз 0.0.4"
 ```
 
-Пример:
-
-```bash
-GH_TOKEN=... ./scripts/publish_private_repo.sh myuser/diatune-safe-private
-```
-
-## Лицензирование
+## Лицензия
 
 MIT (`LICENSE`).
 
-## Процессы OSS
+## OSS-процессы
 
 - История изменений: `CHANGELOG.md`
-- Как контрибьютить: `CONTRIBUTING.md`
+- Правила вклада: `CONTRIBUTING.md`
 - Политика безопасности: `SECURITY.md`
 - Кодекс поведения: `CODE_OF_CONDUCT.md`
