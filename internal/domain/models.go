@@ -67,6 +67,8 @@ type BlockStats struct {
 	FastingHours            float64  `json:"fasting_hours"`
 	HypoEvents              int      `json:"hypo_events"`
 	HyperEvents             int      `json:"hyper_events"`
+	AvgMealCarbs            *float64 `json:"avg_meal_carbs,omitempty"`
+	AvgCorrectionUnits      *float64 `json:"avg_correction_units,omitempty"`
 	MeanPostprandialDelta   *float64 `json:"mean_postprandial_delta,omitempty"`
 	MeanCorrectionRatio     *float64 `json:"mean_correction_ratio,omitempty"`
 	FastingDriftMgdlPerHour *float64 `json:"fasting_drift_mgdl_per_hour,omitempty"`
@@ -98,4 +100,71 @@ type AnalysisReport struct {
 	Warnings         []string         `json:"warnings"`
 	Stats            []BlockStats     `json:"stats"`
 	Recommendations  []Recommendation `json:"recommendations"`
+}
+
+type GlycemicMetrics struct {
+	Samples         int     `json:"samples"`
+	MeanGlucoseMgdl float64 `json:"mean_glucose_mgdl"`
+	StdDevMgdl      float64 `json:"stddev_mgdl"`
+	CVPct           float64 `json:"cv_pct"`
+	GMI             float64 `json:"gmi"`
+
+	TimeInRangePct float64 `json:"time_in_range_pct"`
+	Below70Pct     float64 `json:"below_70_pct"`
+	Below54Pct     float64 `json:"below_54_pct"`
+	Above180Pct    float64 `json:"above_180_pct"`
+	Above250Pct    float64 `json:"above_250_pct"`
+
+	HypoEvents int `json:"hypo_events"`
+}
+
+type RecommendationStats struct {
+	Total         int     `json:"total"`
+	Open          int     `json:"open"`
+	Blocked       int     `json:"blocked"`
+	AvgConfidence float64 `json:"avg_confidence"`
+}
+
+type BacktestDayResult struct {
+	Date            string              `json:"date"`
+	Metrics         GlycemicMetrics     `json:"metrics"`
+	Recommendations RecommendationStats `json:"recommendations"`
+	QualityScore    float64             `json:"quality_score"`
+}
+
+type BacktestReport struct {
+	PatientID  string    `json:"patient_id"`
+	Generated  time.Time `json:"generated"`
+	DataSource string    `json:"data_source"`
+
+	PeriodStart time.Time `json:"period_start"`
+	PeriodEnd   time.Time `json:"period_end"`
+	Days        int       `json:"days"`
+
+	OverallMetrics         GlycemicMetrics     `json:"overall_metrics"`
+	OverallRecommendations RecommendationStats `json:"overall_recommendations"`
+	AverageQualityScore    float64             `json:"average_quality_score"`
+	Daily                  []BacktestDayResult `json:"daily"`
+}
+
+type WeeklyStatsReport struct {
+	PatientID  string    `json:"patient_id"`
+	Generated  time.Time `json:"generated"`
+	DataSource string    `json:"data_source"`
+
+	LookbackDays int `json:"lookback_days"`
+
+	CurrentStart  time.Time `json:"current_start"`
+	CurrentEnd    time.Time `json:"current_end"`
+	PreviousStart time.Time `json:"previous_start"`
+	PreviousEnd   time.Time `json:"previous_end"`
+
+	CurrentMetrics         GlycemicMetrics     `json:"current_metrics"`
+	PreviousMetrics        GlycemicMetrics     `json:"previous_metrics"`
+	CurrentRecommendations RecommendationStats `json:"current_recommendations"`
+
+	DeltaTIRPct          float64 `json:"delta_tir_pct"`
+	DeltaBelow70Pct      float64 `json:"delta_below_70_pct"`
+	DeltaMeanGlucoseMgdl float64 `json:"delta_mean_glucose_mgdl"`
+	DeltaCVPct           float64 `json:"delta_cv_pct"`
 }
