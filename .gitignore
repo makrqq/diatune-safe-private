@@ -1,0 +1,14 @@
+.env
+bin/
+data/
+
+.gocache/
+.gomodcache/
+.gotmp/
+.go/
+
+.venv/
+.uv/
+.pytest_cache/
+__pycache__/
+*.pyc
