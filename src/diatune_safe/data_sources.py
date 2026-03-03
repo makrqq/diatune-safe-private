@@ -39,9 +39,9 @@ class NightscoutDataSource:
             )
 
         if glucose_resp.status_code >= 400:
-            raise DataSourceError(f"Nightscout glucose request failed with {glucose_resp.status_code}")
+            raise DataSourceError(f"Ошибка запроса глюкозы к Nightscout: {glucose_resp.status_code}")
         if treatments_resp.status_code >= 400:
-            raise DataSourceError(f"Nightscout treatments request failed with {treatments_resp.status_code}")
+            raise DataSourceError(f"Ошибка запроса данных лечения к Nightscout: {treatments_resp.status_code}")
 
         glucose_rows = glucose_resp.json()
         treatment_rows = treatments_resp.json()
