@@ -11,6 +11,7 @@ import (
 	"diatune-safe/internal/config"
 	"diatune-safe/internal/domain"
 	"diatune-safe/internal/service"
+	appversion "diatune-safe/internal/version"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -22,8 +23,9 @@ type Server struct {
 }
 
 type healthResponse struct {
-	Status string `json:"status"`
-	Mode   string `json:"mode"`
+	Status  string `json:"status"`
+	Mode    string `json:"mode"`
+	Version string `json:"version"`
 }
 
 type reportListResponse struct {
@@ -111,7 +113,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	if s.settings.NightscoutURL != "" {
 		mode = "nightscout"
 	}
-	writeJSON(w, http.StatusOK, healthResponse{Status: "ok", Mode: mode})
+	writeJSON(w, http.StatusOK, healthResponse{Status: "ok", Mode: mode, Version: appversion.Semver()})
 }
 
 func (s *Server) handleGetProfile(w http.ResponseWriter, r *http.Request) {
