@@ -104,6 +104,7 @@ go run ./cmd/diatune-safe bot
 - `/weekstats [patient_id] [days]`
 - `/latest [patient_id]`
 - `/pending [patient_id]`
+- `/version`
 - `/ack <recommendation_id> [reviewer]`
 
 ## Worker
@@ -162,6 +163,12 @@ go run ./cmd/diatune-safe worker --patients patient-a,patient-b
 ```bash
 go test ./...
 ```
+
+## Версионирование
+
+- Текущая версия хранится в файле `VERSION`.
+- CLI-команда: `diatune-safe version`.
+- Telegram-команда: `/version`.
 
 ## Docker
 
