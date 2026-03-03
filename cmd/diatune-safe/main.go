@@ -16,6 +16,7 @@ import (
 	"diatune-safe/internal/scheduler"
 	"diatune-safe/internal/service"
 	"diatune-safe/internal/telegram"
+	appversion "diatune-safe/internal/version"
 )
 
 func main() {
@@ -41,6 +42,8 @@ func main() {
 
 	cmd := os.Args[1]
 	switch cmd {
+	case "version":
+		fmt.Println(appversion.Semver())
 	case "api":
 		fs := flag.NewFlagSet("api", flag.ExitOnError)
 		host := fs.String("host", settings.AppHost, "host")
@@ -172,8 +175,10 @@ func main() {
 }
 
 func printUsage() {
+	fmt.Printf("Diatune Safe %s\n", appversion.Semver())
 	fmt.Println("Usage: diatune-safe <command> [flags]")
 	fmt.Println("Commands:")
+	fmt.Println("  version   Print app version")
 	fmt.Println("  api       Run HTTP API server")
 	fmt.Println("  bot       Run Telegram bot")
 	fmt.Println("  worker    Run scheduled analysis worker")
